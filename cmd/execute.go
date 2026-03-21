@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rootCmd = &cmd.Command{
+var rootCmd = &cobra.Command{
 	Use:	"kb",
 	Short: 	"Knowledge base CLI",
 	Long:	"A CLI tool to manage your personal knowledge base.",
