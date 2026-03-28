@@ -16,6 +16,14 @@ func InitDB(path string) {
 		log.Fatal(err)
 	}
 
+	DB.SetMaxOpenConns(1)
+
+	// Performance + safety
+	_, err = DB.Exec(`
+		PRAGMA journal_mode = WAL;
+		PRAGMA foreign_keys = ON;
+	`)
+
 	// test connection
 	if err := DB.Ping(); err != nil {
 		log.Fatal(err)
