@@ -1,8 +1,9 @@
+package models
+
 type Area string
 
 const (
-	Work    Area = "work"
-	Finance Area = "finance"
+	Work     Area = "work"
+	Finance  Area = "finance"
 	Personal Area = "personal"
 )
-

@@ -1,3 +1,5 @@
+package models
+
 type LinkType string
 
 const (
@@ -10,4 +12,3 @@ const (
 	About       LinkType = "about"
 	CreatedBy   LinkType = "created_by"
 )
-

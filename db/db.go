@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"log"
+	"os"
 
 	_ "modernc.org/sqlite"
 )
@@ -39,4 +40,3 @@ func RunMigrations() error {
 	_, err = DB.Exec(string(schema))
 	return err
 }
-

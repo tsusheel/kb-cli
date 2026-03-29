@@ -1,14 +1,13 @@
-package main 
+package main
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/tsusheel/kb-cli/cmd"
-	"github.com/tsusheel/kb-cli/db"
-	"github.com/tsusheel/kb-cli/app"
 	"github.com/spf13/viper"
+	"github.com/tsusheel/kb-cli/app"
+	"github.com/tsusheel/kb-cli/cmd"
 )
 
 func main() {
@@ -51,4 +50,3 @@ func main() {
 
 	cmd.Execute()
 }
-
