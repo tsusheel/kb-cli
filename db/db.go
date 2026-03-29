@@ -30,24 +30,13 @@ func InitDB(path string) {
 	}
 }
 
-func CreateTables() {
-	query := `
-	CREATE TABLE IF NOT EXISTS notes (
-		id TEXT PRIMARY KEY,
-		title TEXT,
-		content TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS links (
-		from_id TEXT,
-		to_id TEXT
-	);
-	`
-
-	_, err := DB.Exec(query)
+func RunMigrations() error {
+	schema, err := os.ReadFile("db/schema.sql")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	_, err = DB.Exec(string(schema))
+	return err
 }
 

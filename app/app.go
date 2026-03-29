@@ -16,6 +16,6 @@ func InitApp() {
 	dbPath := filepath.Join(basePath, "kb.db")
 
 	db.InitDB(dbPath)
-	db.CreateTables()
+	db.RunMigrations()
 }
 
