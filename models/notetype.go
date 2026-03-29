@@ -3,6 +3,7 @@ package models
 type NoteType string
 
 const (
+	DefaultNote NoteType = "note"
 	Idea       NoteType = "idea"
 	Person     NoteType = "person"
 	Concept    NoteType = "concept"

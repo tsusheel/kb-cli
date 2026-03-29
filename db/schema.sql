@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS notes (
   type TEXT,
   status TEXT,
   area TEXT,
-  area TEXT,
   importance INTEGER,
   clarity INTEGER,
   source TEXT,
