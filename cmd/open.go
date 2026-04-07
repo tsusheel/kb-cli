@@ -19,7 +19,7 @@ var openCmd = &cobra.Command{
 		if len(args) > 0 {
 			id = args[0]
 		} else {
-			notes, err := db.ListNotes()
+			notes, err := db.ListNotes("")
 			if err != nil {
 				return err
 			}

@@ -95,9 +95,18 @@ func GetNote(id string) (*models.Note, error) {
 	return &n, nil
 }
 
-func ListNotes() ([]models.Note, error) {
-	query := `SELECT id, title, type, status, area, created_at, updated_at FROM notes ORDER BY updated_at DESC`
-	rows, err := DB.Query(query)
+func ListNotes(filterType string) ([]models.Note, error) {
+	var query string
+	var args []interface{}
+
+	if filterType != "" {
+		query = `SELECT id, title, type, status, area, created_at, updated_at FROM notes WHERE type = ? ORDER BY updated_at DESC`
+		args = append(args, filterType)
+	} else {
+		query = `SELECT id, title, type, status, area, created_at, updated_at FROM notes ORDER BY updated_at DESC`
+	}
+
+	rows, err := DB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -9,12 +9,22 @@ import (
 	"github.com/tsusheel/kb-cli/db"
 )
 
+var listNotesFlag bool
+var listProjectsFlag bool
+
 var listCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"ls"},
-	Short:   "List all notes",
+	Short:   "List all items",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		notes, err := db.ListNotes()
+		var filterType string
+		if listNotesFlag {
+			filterType = "note"
+		} else if listProjectsFlag {
+			filterType = "project"
+		}
+
+		notes, err := db.ListNotes(filterType)
 		if err != nil {
 			return err
 		}
@@ -39,5 +49,7 @@ var listCmd = &cobra.Command{
 }
 
 func init() {
+	listCmd.Flags().BoolVarP(&listNotesFlag, "notes", "n", false, "List only notes")
+	listCmd.Flags().BoolVarP(&listProjectsFlag, "projects", "p", false, "List only projects")
 	rootCmd.AddCommand(listCmd)
 }
