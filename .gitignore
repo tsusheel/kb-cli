@@ -20,4 +20,7 @@
 .vscode/ # For VS Code users
 
 kbapp
+kb.db
+kb.db-shm
+kb.db-wal
 

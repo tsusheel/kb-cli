@@ -8,9 +8,8 @@ import (
 func captureEditorContent(initialContent string) (string, error) {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
-		editor = "notepad" // Fallback to notepad for Windows
+		editor = "vi" // Fallback to vi for linux 
 	}
-
 
 	f, err := os.CreateTemp("", "kb-note-*.md")
 	if err != nil {
