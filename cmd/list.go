@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"text/tabwriter"
 
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
 )
@@ -24,19 +24,16 @@ var listCmd = &cobra.Command{
 			return nil
 		}
 
-		t := table.NewWriter()
-		t.SetOutputMirror(os.Stdout)
-		t.AppendHeader(table.Row{"ID", "Title", "Type", "Status", "Updated At"})
-
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		for _, n := range notes {
 			id := n.ID
 			if len(id) > 7 {
 				id = id[:7]
 			}
-			t.AppendRow(table.Row{id, n.Title, n.Type, n.Status, n.UpdatedAt.Format("2004-07-31 17:30")})
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", id, n.Title, n.Type, n.Status, n.UpdatedAt.Format("2006-01-02 15:04"))
 		}
+		w.Flush()
 
-		t.Render()
 		return nil
 	},
 }
