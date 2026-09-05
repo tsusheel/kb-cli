@@ -25,17 +25,22 @@ func CreateNote(n *models.Note) error {
 		n.UpdatedAt = time.Now()
 	}
 
+	var targetDT sql.NullTime
+	if !n.TargetDateTime.IsZero() {
+		targetDT = sql.NullTime{Time: n.TargetDateTime, Valid: true}
+	}
+
 	query := `INSERT INTO notes (
-		id, title, content, type, status, area, importance, clarity, source, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	
-	_, err = tx.Exec(query, n.ID, n.Title, n.Content, n.Type, n.Status, n.Area, n.Importance, n.Clarity, n.Source, n.CreatedAt, n.UpdatedAt)
+		id, note, note_flesh, type, status, area, importance, clarity, source, target_date_time, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	_, err = tx.Exec(query, n.ID, n.Note, n.NoteFlesh, n.Type, n.Status, n.Area, n.Importance, n.Clarity, n.Source, targetDT, n.CreatedAt, n.UpdatedAt)
 	if err != nil {
 		return err
 	}
 
-	ftsQuery := `INSERT INTO notes_fts (note_id, title, content) VALUES (?, ?, ?)`
-	_, err = tx.Exec(ftsQuery, n.ID, n.Title, n.Content)
+	ftsQuery := `INSERT INTO notes_fts (note_id, note, note_flesh) VALUES (?, ?, ?)`
+	_, err = tx.Exec(ftsQuery, n.ID, n.Note, n.NoteFlesh)
 	if err != nil {
 		return err
 	}
@@ -47,7 +52,7 @@ func ResolveID(id string) (string, error) {
 	if len(id) == 36 { // full UUID
 		return id, nil
 	}
-	
+
 	query := `SELECT id FROM notes WHERE id LIKE ?`
 	rows, err := DB.Query(query, id+"%")
 	if err != nil {
@@ -63,14 +68,14 @@ func ResolveID(id string) (string, error) {
 			return "", err
 		}
 	}
-	
+
 	if count == 0 {
 		return "", ErrNotFound
 	}
 	if count > 1 {
 		return "", ErrAmbiguous
 	}
-	
+
 	return matchedID, nil
 }
 
@@ -80,16 +85,20 @@ func GetNote(id string) (*models.Note, error) {
 		return nil, err
 	}
 
-	query := `SELECT id, title, content, type, status, area, importance, clarity, source, created_at, updated_at FROM notes WHERE id = ?`
+	query := `SELECT id, note, note_flesh, type, status, area, importance, clarity, source, target_date_time, created_at, updated_at FROM notes WHERE id = ?`
 	row := DB.QueryRow(query, fullID)
 
 	var n models.Note
-	err = row.Scan(&n.ID, &n.Title, &n.Content, &n.Type, &n.Status, &n.Area, &n.Importance, &n.Clarity, &n.Source, &n.CreatedAt, &n.UpdatedAt)
+	var targetDT sql.NullTime
+	err = row.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &n.Importance, &n.Clarity, &n.Source, &targetDT, &n.CreatedAt, &n.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrNotFound
 		}
 		return nil, err
+	}
+	if targetDT.Valid {
+		n.TargetDateTime = targetDT.Time
 	}
 
 	return &n, nil
@@ -100,10 +109,10 @@ func ListNotes(filterType string) ([]models.Note, error) {
 	var args []interface{}
 
 	if filterType != "" {
-		query = `SELECT id, title, type, status, area, created_at, updated_at FROM notes WHERE type = ? ORDER BY updated_at DESC`
+		query = `SELECT id, note, type, status, area, target_date_time, created_at, updated_at FROM notes WHERE type = ? ORDER BY updated_at DESC`
 		args = append(args, filterType)
 	} else {
-		query = `SELECT id, title, type, status, area, created_at, updated_at FROM notes ORDER BY updated_at DESC`
+		query = `SELECT id, note, type, status, area, target_date_time, created_at, updated_at FROM notes ORDER BY updated_at DESC`
 	}
 
 	rows, err := DB.Query(query, args...)
@@ -115,9 +124,13 @@ func ListNotes(filterType string) ([]models.Note, error) {
 	var notes []models.Note
 	for rows.Next() {
 		var n models.Note
-		err := rows.Scan(&n.ID, &n.Title, &n.Type, &n.Status, &n.Area, &n.CreatedAt, &n.UpdatedAt)
+		var targetDT sql.NullTime
+		err := rows.Scan(&n.ID, &n.Note, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt)
 		if err != nil {
 			return nil, err
+		}
+		if targetDT.Valid {
+			n.TargetDateTime = targetDT.Time
 		}
 		notes = append(notes, n)
 	}
@@ -127,7 +140,7 @@ func ListNotes(filterType string) ([]models.Note, error) {
 
 func SearchNotes(searchTerm string) ([]models.Note, error) {
 	query := `
-		SELECT n.id, n.title, n.type, n.status, n.area, n.created_at, n.updated_at 
+		SELECT n.id, n.note, n.type, n.status, n.area, n.target_date_time, n.created_at, n.updated_at 
 		FROM notes_fts fts
 		JOIN notes n ON n.id = fts.note_id
 		WHERE notes_fts MATCH ?
@@ -142,9 +155,13 @@ func SearchNotes(searchTerm string) ([]models.Note, error) {
 	var notes []models.Note
 	for rows.Next() {
 		var n models.Note
-		err := rows.Scan(&n.ID, &n.Title, &n.Type, &n.Status, &n.Area, &n.CreatedAt, &n.UpdatedAt)
+		var targetDT sql.NullTime
+		err := rows.Scan(&n.ID, &n.Note, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt)
 		if err != nil {
 			return nil, err
+		}
+		if targetDT.Valid {
+			n.TargetDateTime = targetDT.Time
 		}
 		notes = append(notes, n)
 	}

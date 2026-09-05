@@ -9,8 +9,12 @@ import (
 	"github.com/tsusheel/kb-cli/db"
 )
 
-var listNotesFlag bool
-var listProjectsFlag bool
+var (
+	listNotesFlag    bool
+	listProjectsFlag bool
+	listTodosFlag    bool
+	listTypeFlag     string
+)
 
 var listCmd = &cobra.Command{
 	Use:     "list",
@@ -18,10 +22,14 @@ var listCmd = &cobra.Command{
 	Short:   "List all items",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var filterType string
-		if listNotesFlag {
+		if listTypeFlag != "" {
+			filterType = listTypeFlag
+		} else if listNotesFlag {
 			filterType = "note"
 		} else if listProjectsFlag {
 			filterType = "project"
+		} else if listTodosFlag {
+			filterType = "todo"
 		}
 
 		notes, err := db.ListNotes(filterType)
@@ -40,7 +48,11 @@ var listCmd = &cobra.Command{
 			if len(id) > 7 {
 				id = id[:7]
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", id, n.Title, n.Type, n.Status, n.UpdatedAt.Format("2006-01-02 15:04"))
+			displayNote := n.Note
+			if displayNote == "" {
+				displayNote = "<Untitled>"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", id, displayNote, n.Type, n.Status, n.UpdatedAt.Format("2006-01-02 15:04"))
 		}
 		w.Flush()
 
@@ -51,5 +63,7 @@ var listCmd = &cobra.Command{
 func init() {
 	listCmd.Flags().BoolVarP(&listNotesFlag, "notes", "n", false, "List only notes")
 	listCmd.Flags().BoolVarP(&listProjectsFlag, "projects", "p", false, "List only projects")
+	listCmd.Flags().BoolVarP(&listTodosFlag, "todos", "d", false, "List only todos")
+	listCmd.Flags().StringVarP(&listTypeFlag, "type", "t", "", "Filter by note type (e.g. todo, project, note, idea)")
 	rootCmd.AddCommand(listCmd)
 }

@@ -30,6 +30,8 @@ func main() {
 
 		// 2. Set default values
 		viper.Set("app_name", "kb-app")
+		viper.Set("base_path", configDir)
+		viper.Set("date_format", "2006-01-02")
 
 		// 3. Create the config file
 		file, err := os.Create(configFile)

@@ -2,13 +2,16 @@ package db
 
 import (
 	"database/sql"
+	_ "embed"
 	"log"
-	"os"
 
 	_ "modernc.org/sqlite"
 )
 
 var DB *sql.DB
+
+//go:embed schema.sql
+var schemaSQL string
 
 func InitDB(path string) {
 	var err error
@@ -32,11 +35,13 @@ func InitDB(path string) {
 }
 
 func RunMigrations() error {
-	schema, err := os.ReadFile("db/schema.sql")
-	if err != nil {
-		return err
-	}
-
-	_, err = DB.Exec(string(schema))
+	_, err := DB.Exec(schemaSQL)
 	return err
+}
+
+func CloseDB() error {
+	if DB != nil {
+		return DB.Close()
+	}
+	return nil
 }

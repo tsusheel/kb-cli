@@ -29,7 +29,7 @@ var openCmd = &cobra.Command{
 			}
 
 			idx, err := fuzzyfinder.Find(notes, func(i int) string {
-				displayTitle := notes[i].Title
+				displayTitle := notes[i].Note
 				if displayTitle == "" {
 					displayTitle = "<Untitled>"
 				}
@@ -60,15 +60,31 @@ var openCmd = &cobra.Command{
 		}
 
 		fmt.Printf("=========== [%s] ===========\n", n.ID[:7])
-		if n.Title != "" {
-			fmt.Printf("Title: %s\n", n.Title)
+		if n.Note != "" {
+			fmt.Printf("Note: %s\n", n.Note)
 		}
 		fmt.Printf("Type: %s | Status: %s", n.Type, n.Status)
 		if n.Area != "" {
 			fmt.Printf(" | Area: %s", n.Area)
 		}
 		fmt.Println()
-		
+
+		if !n.TargetDateTime.IsZero() {
+			fmt.Printf("Due: %s\n", n.TargetDateTime.Format("2006-01-02 15:04"))
+		}
+		if n.Importance > 0 {
+			fmt.Printf("Importance: %d/5 ", n.Importance)
+		}
+		if n.Clarity > 0 {
+			fmt.Printf("Clarity: %d/5 ", n.Clarity)
+		}
+		if n.Source != "" {
+			fmt.Printf("Source: %s", n.Source)
+		}
+		if n.Importance > 0 || n.Clarity > 0 || n.Source != "" {
+			fmt.Println()
+		}
+
 		var tagStrs []string
 		for _, t := range tags {
 			tagStrs = append(tagStrs, t.Name)
@@ -76,7 +92,7 @@ var openCmd = &cobra.Command{
 		if len(tagStrs) > 0 {
 			fmt.Printf("Tags: %s\n", strings.Join(tagStrs, ", "))
 		}
-		
+
 		if len(links) > 0 {
 			fmt.Println("Links:")
 			for _, l := range links {
@@ -86,17 +102,17 @@ var openCmd = &cobra.Command{
 					otherID = l.FromNote
 					dir = "<--"
 				}
-				
-				otherNoteTitle := otherID[:7]
-				if lNote, err := db.GetNote(otherID); err == nil && lNote.Title != "" {
-					otherNoteTitle = lNote.Title
+
+				otherNoteDisplay := otherID[:7]
+				if lNote, err := db.GetNote(otherID); err == nil && lNote.Note != "" {
+					otherNoteDisplay = lNote.Note
 				}
-				fmt.Printf("  %s %s (%s)\n", dir, otherNoteTitle, l.Type)
+				fmt.Printf("  %s %s (%s)\n", dir, otherNoteDisplay, l.Type)
 			}
 		}
 
 		fmt.Println("--------------------------------")
-		fmt.Println(n.Content)
+		fmt.Println(n.NoteFlesh)
 		fmt.Println("========================================")
 
 		return nil

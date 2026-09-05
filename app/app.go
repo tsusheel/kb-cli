@@ -10,12 +10,18 @@ import (
 
 func InitApp() {
 	basePath := viper.GetString("base_path")
+	if basePath == "" {
+		home, _ := os.UserHomeDir()
+		basePath = filepath.Join(home, ".config", "kb")
+	}
 
 	os.MkdirAll(basePath, 0755)
 
 	dbPath := filepath.Join(basePath, "kb.db")
 
 	db.InitDB(dbPath)
-	db.RunMigrations()
+	if err := db.RunMigrations(); err != nil {
+		panic(err)
+	}
 }
 

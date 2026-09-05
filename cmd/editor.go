@@ -3,12 +3,17 @@ package cmd
 import (
 	"os"
 	"os/exec"
+	"runtime"
 )
 
 func captureEditorContent(initialContent string) (string, error) {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
-		editor = "vi" // Fallback to vi for linux 
+		if runtime.GOOS == "windows" {
+			editor = "notepad"
+		} else {
+			editor = "vi"
+		}
 	}
 
 	f, err := os.CreateTemp("", "kb-note-*.md")

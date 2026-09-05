@@ -1,13 +1,14 @@
 CREATE TABLE IF NOT EXISTS notes (
   id TEXT PRIMARY KEY,
-  title TEXT,
-  content TEXT,
+  note TEXT,
+  note_flesh TEXT,
   type TEXT,
   status TEXT,
   area TEXT,
   importance INTEGER,
   clarity INTEGER,
   source TEXT,
+  target_date_time DATETIME,
   created_at DATETIME,
   updated_at DATETIME
 );
@@ -38,8 +39,8 @@ CREATE TABLE IF NOT EXISTS daily_notes (
 
 -- Full Text Search
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
-  title,
-  content,
+  note,
+  note_flesh,
   note_id UNINDEXED
 );
 

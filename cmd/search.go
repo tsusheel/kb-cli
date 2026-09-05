@@ -33,7 +33,11 @@ var searchCmd = &cobra.Command{
 			if len(id) > 7 {
 				id = id[:7]
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", id, n.Title, n.Type, n.Status, n.UpdatedAt.Format("2006-01-02 15:04"))
+			displayNote := n.Note
+			if displayNote == "" {
+				displayNote = "<Untitled>"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", id, displayNote, n.Type, n.Status, n.UpdatedAt.Format("2006-01-02 15:04"))
 		}
 		w.Flush()
 		return nil
