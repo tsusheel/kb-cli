@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tsusheel/kb-cli/models"
@@ -19,13 +20,15 @@ func AddTag(noteID string, tagName string) error {
 	}
 	defer tx.Rollback()
 
+	now := time.Now()
+
 	// Find or Create Tag
 	var tagID string
 	err = tx.QueryRow("SELECT id FROM tags WHERE name = ?", tagName).Scan(&tagID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			tagID = uuid.New().String()
-			_, err = tx.Exec("INSERT INTO tags (id, name) VALUES (?, ?)", tagID, tagName)
+			_, err = tx.Exec("INSERT INTO tags (id, name, created_at) VALUES (?, ?, ?)", tagID, tagName, now)
 			if err != nil {
 				return err
 			}
@@ -35,7 +38,7 @@ func AddTag(noteID string, tagName string) error {
 	}
 
 	// Link tag to note
-	_, err = tx.Exec("INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)", fullNoteID, tagID)
+	_, err = tx.Exec("INSERT OR IGNORE INTO note_tags (note_id, tag_id, created_at) VALUES (?, ?, ?)", fullNoteID, tagID, now)
 	if err != nil {
 		return err
 	}
@@ -50,7 +53,7 @@ func GetTagsForNote(noteID string) ([]models.Tag, error) {
 	}
 
 	query := `
-		SELECT t.id, t.name 
+		SELECT t.id, t.name, t.created_at 
 		FROM tags t
 		JOIN note_tags nt ON t.id = nt.tag_id
 		WHERE nt.note_id = ?
@@ -64,8 +67,12 @@ func GetTagsForNote(noteID string) ([]models.Tag, error) {
 	var tags []models.Tag
 	for rows.Next() {
 		var t models.Tag
-		if err := rows.Scan(&t.ID, &t.Name); err != nil {
+		var createdAt sql.NullTime
+		if err := rows.Scan(&t.ID, &t.Name, &createdAt); err != nil {
 			return nil, err
+		}
+		if createdAt.Valid {
+			t.CreatedAt = createdAt.Time
 		}
 		tags = append(tags, t)
 	}

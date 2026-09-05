@@ -173,3 +173,68 @@ func TestTagsAndLinks(t *testing.T) {
 		t.Errorf("unexpected links: %v", links)
 	}
 }
+
+func TestUpdateAndSoftDeleteNote(t *testing.T) {
+	setupTestDB(t)
+
+	n := &models.Note{
+		ID:        "cccc1111222233334444555566667777",
+		Note:      "Original Title",
+		NoteFlesh: "Original Flesh",
+		Type:      models.DefaultNote,
+		Status:    models.Active,
+		Area:      models.Personal,
+	}
+
+	if err := CreateNote(n); err != nil {
+		t.Fatal(err)
+	}
+
+	// Update note
+	n.Note = "Updated Title"
+	n.NoteFlesh = "Updated Flesh Content"
+	n.Status = models.InProgress
+	if err := UpdateNote(n); err != nil {
+		t.Fatalf("UpdateNote failed: %v", err)
+	}
+
+	got, err := GetNote(n.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Note != "Updated Title" || got.Status != models.InProgress {
+		t.Errorf("updated note mismatch: %v", got)
+	}
+
+	// Soft delete note
+	if err := SoftDeleteNote(n.ID, "deleted by AI for testing"); err != nil {
+		t.Fatalf("SoftDeleteNote failed: %v", err)
+	}
+
+	// Verify excluded from normal list
+	activeNotes, err := ListNotes("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(activeNotes) != 0 {
+		t.Errorf("expected 0 active notes, got %d", len(activeNotes))
+	}
+
+	// Verify included when includeDeleted is true
+	allNotes, err := ListNotesExtended("", "", "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(allNotes) != 1 || allNotes[0].DeletedNote != "deleted by AI for testing" {
+		t.Errorf("expected 1 deleted note with reason, got %v", allNotes)
+	}
+
+	// Verify FTS excludes deleted notes
+	searchResults, err := SearchNotes("Updated")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(searchResults) != 0 {
+		t.Errorf("expected 0 search results for deleted note, got %d", len(searchResults))
+	}
+}

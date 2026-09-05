@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
 	"github.com/tsusheel/kb-cli/models"
+	"github.com/tsusheel/kb-cli/utils"
 )
 
 var (
@@ -27,7 +28,7 @@ var addCmd = &cobra.Command{
 		var targetDT time.Time
 		if noteDue != "" {
 			var err error
-			targetDT, err = ParseDate(noteDue)
+			targetDT, err = utils.ParseDate(noteDue)
 			if err != nil {
 				return fmt.Errorf("invalid due date %q: %w", noteDue, err)
 			}

@@ -9,8 +9,10 @@ type Note struct {
 	Type      NoteType
 	Status    Status // active, raw, refined, in-progress, completed, archived
 	Area      Area
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   time.Time
+	DeletedNote string
 
 	// Optional metadata
 	Importance     int // 1-5
