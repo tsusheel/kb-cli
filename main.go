@@ -17,6 +17,8 @@ func main() {
 
 	viper.SetConfigFile(configFile)
 	viper.SetConfigType("yaml")
+	viper.SetEnvPrefix("KB")
+	viper.AutomaticEnv()
 
 	// Try reading config
 	err := viper.ReadInConfig()

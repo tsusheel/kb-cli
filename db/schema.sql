@@ -54,6 +54,12 @@ CREATE TABLE IF NOT EXISTS daily_notes (
   created_at DATETIME
 );
 
+CREATE TABLE IF NOT EXISTS sync_state (
+  provider TEXT PRIMARY KEY,
+  last_synced_at DATETIME,
+  created_at DATETIME
+);
+
 -- Full Text Search
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
   note,

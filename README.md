@@ -1,8 +1,8 @@
 # Knowledge Base CLI (`kb`)
 
-A lightning-fast, local-first personal knowledge base and second brain CLI with embedded SQLite storage and built-in **Model Context Protocol (MCP)** server connectivity for AI agents.
+A lightning-fast, local-first personal knowledge base and second brain CLI with embedded SQLite storage, remote **PostgreSQL** synchronization, and built-in **Model Context Protocol (MCP)** server connectivity for AI agents.
 
-Designed around a **two-speed capture philosophy**: capture fleeting thoughts in milliseconds directly from your terminal, flesh them out into deep markdown notes in your favorite editor, and seamlessly collaborate with AI assistants over MCP.
+Designed around a **two-speed capture philosophy**: capture fleeting thoughts in milliseconds directly from your terminal, flesh them out into deep markdown notes in your favorite editor, sync securely across machines via PostgreSQL, and seamlessly collaborate with AI assistants over MCP.
 
 ---
 
@@ -11,6 +11,12 @@ Designed around a **two-speed capture philosophy**: capture fleeting thoughts in
 - **⚡ Two-Speed Thought Capture**:
   - **Instant Jot**: Fast `< 50ms` capture directly from the terminal without opening an editor (`kb "thought"`, `kb jot "idea"`).
   - **Deep Fleshing**: Dedicated editor workflow (`$EDITOR`) to craft rich markdown bodies (`kb add`, `kb edit <id>`).
+- **🔄 Local-First PostgreSQL Sync (`kb sync`)**:
+  - Keep 100% offline capability and sub-millisecond local SQLite speed.
+  - Synchronize notes, tags, links, and daily logs with any PostgreSQL database (local, self-hosted, or cloud PostgreSQL).
+- **🔐 Hardware/OS Encrypted Secrets**:
+  - Passwords and connection secrets are **never stored in plaintext config files**.
+  - Encrypted directly in your OS Credential Manager (Windows Credential Manager / macOS Keychain / Linux Secret Service) with masked terminal entry.
 - **📅 Daily Temporal Stream**: Micro-log throughout the day (`kb log "..."`, `kb today`) and promote impactful logs into permanent notes (`kb promote <id>`).
 - **📥 Inbox & Triage Wizard**: Capture chaotically in a `raw` state, then rapidly triage, refine, tag, or link notes (`kb inbox`, `kb triage`).
 - **🔍 Full-Text Search (FTS5)**: Instant search across note headlines and detailed markdown content bodies (`kb search "query"`).
@@ -25,11 +31,9 @@ Designed around a **two-speed capture philosophy**: capture fleeting thoughts in
 ### Prerequisites
 
 - **Go 1.21+** installed ([Download Go](https://go.dev/dl/))
-- **CGO is NOT required** (uses the pure-Go SQLite driver `modernc.org/sqlite`)
+- **CGO is NOT required** (uses pure-Go drivers `modernc.org/sqlite` and `pgx/v5`)
 
 ### 1. Build from Source
-
-Clone the repository and build the binary:
 
 ```bash
 # Clone the repository
@@ -56,26 +60,76 @@ go build -o kb.exe .
 
 ---
 
-## Configuration
+## Configuration & Secrets Management
 
 `kb` works out-of-the-box with **zero manual configuration required**. 
 
-On first run, `kb` automatically initializes:
-- **Config directory**: `~/.config/kb/`
-- **Config file**: `~/.config/kb/config.yaml`
-- **SQLite database**: `~/.config/kb/kb.db`
+On first run, `kb` automatically initializes `~/.config/kb/config.yaml` and `~/.config/kb/kb.db`.
 
-### Configuration Options (`config.yaml`)
+### CLI Configuration Commands (`kb config`)
 
-```yaml
-# Application identifier
-app_name: "kb-app"
+Manage configurations directly from the terminal without editing files manually:
 
-# Base directory where database and assets are stored
-base_path: "~/.config/kb"
+```bash
+# Set a public configuration value
+kb config set date_format "2006-01-02"
+kb config set remote.postgres_url "postgres://username@localhost:5432/dbname?sslmode=disable"
 
-# Default custom date format (in Go layout format)
-date_format: "2006-01-02"
+# Securely save a secret / password in the OS Credential Manager (input is hidden)
+kb config set-secret postgres_password
+
+# View settings
+kb config get date_format
+kb config list
+```
+
+### 🔒 Security Guarantee: Zero Plaintext Secrets
+
+- Passwords stored via `kb config set-secret` are encrypted natively by your Operating System:
+  - **Windows**: Windows Credential Manager / DPAPI
+  - **macOS**: Apple Keychain
+  - **Linux**: Secret Service (GNOME Keyring / KWallet)
+- `config.yaml` only contains non-sensitive settings (database URL without password).
+- Environment variables (e.g., `KB_POSTGRES_PASSWORD`, `KB_POSTGRES_URL`, `DATABASE_URL`) are automatically supported as overrides for CI/CD or headless environments.
+
+---
+
+## Remote PostgreSQL Synchronization
+
+`kb` uses a **Local-First + Remote Sync** architecture: your daily CLI operations are always lightning-fast on local SQLite, and you can sync with remote PostgreSQL whenever you want.
+
+### 1. Configure in `kb-cli`
+
+Run the interactive setup wizard:
+
+```bash
+kb config setup
+```
+
+The wizard will:
+1. Prompt for your **PostgreSQL Connection URL** (e.g. `postgres://username@localhost:5432/dbname?sslmode=disable`).
+2. Prompt for your **PostgreSQL Password** (hidden masked input, saved to OS Keyring).
+3. Automatically verify connectivity and initialize the remote tables.
+
+*(Optional)* If you prefer to manually run the PostgreSQL schema, you can find it in [`postgres/schema.sql`](postgres/schema.sql).
+
+### 2. Synchronizing Notes
+
+```bash
+# Two-way sync (push local modifications + pull remote modifications)
+kb sync
+
+# Push only local changes
+kb sync push
+
+# Pull only remote changes
+kb sync pull
+
+# Check sync status and pending changes
+kb sync status
+
+# Test connection to PostgreSQL
+kb sync test
 ```
 
 ---
@@ -207,7 +261,7 @@ AI assistants will have access to:
 
 ## Running Tests
 
-Run the full test suite across database, MCP server, and utility packages:
+Run the full test suite across database, sync engine, OS secrets, MCP server, and utility packages:
 
 ```bash
 go test -v ./...

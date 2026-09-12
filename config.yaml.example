@@ -1,5 +1,5 @@
 # Knowledge Base (kb) Configuration File
-# Placed at ~/.config/kb/config.yaml
+# Location: ~/.config/kb/config.yaml
 
 # Application Identifier
 app_name: "kb-app"
@@ -9,3 +9,12 @@ base_path: "~/.config/kb"
 
 # Preferred default date format for parsing / display
 date_format: "2006-01-02"
+
+# Remote PostgreSQL Synchronization Settings
+# Note: Sensitive database passwords are NEVER saved in plaintext here.
+# They are stored securely in your OS Credential Manager (Windows Credential Manager / macOS Keychain / Linux Secret Service).
+# Configure interactively via: kb config setup
+remote:
+  enabled: true
+  provider: "postgres"
+  postgres_url: "postgres://username@localhost:5432/dbname?sslmode=disable"
