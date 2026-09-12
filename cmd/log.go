@@ -11,8 +11,8 @@ import (
 
 var showAllLogs bool
 
-func displayTodayLogs(date time.Time) error {
-	logs, err := db.GetDailyLogsForDate(date, true)
+func displayTodayLogs(date time.Time, includePromoted bool) error {
+	logs, err := db.GetDailyLogsForDate(date, includePromoted)
 	if err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ var logCmd = &cobra.Command{
 	Short: "Append a micro-log to today's stream or view today's timeline",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			return displayTodayLogs(time.Now())
+			return displayTodayLogs(time.Now(), showAllLogs)
 		}
 
 		entry := strings.Join(args, " ")
@@ -61,7 +61,7 @@ var todayCmd = &cobra.Command{
 	Use:   "today",
 	Short: "View today's chronological stream of logs",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return displayTodayLogs(time.Now())
+		return displayTodayLogs(time.Now(), true)
 	},
 }
 

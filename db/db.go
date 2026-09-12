@@ -39,10 +39,6 @@ func InitSchema() error {
 	return err
 }
 
-func RunMigrations() error {
-	return InitSchema()
-}
-
 func CloseDB() error {
 	if DB != nil {
 		return DB.Close()

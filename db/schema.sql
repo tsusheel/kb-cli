@@ -47,13 +47,6 @@ CREATE TABLE IF NOT EXISTS daily_logs (
   deleted_note TEXT
 );
 
-CREATE TABLE IF NOT EXISTS daily_notes (
-  id TEXT PRIMARY KEY,
-  date DATETIME,
-  note_id TEXT,
-  created_at DATETIME
-);
-
 CREATE TABLE IF NOT EXISTS sync_state (
   provider TEXT PRIMARY KEY,
   last_synced_at DATETIME,
