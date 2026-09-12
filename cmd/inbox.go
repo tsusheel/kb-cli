@@ -36,7 +36,7 @@ var inboxCmd = &cobra.Command{
 			fmt.Printf("=== Raw Notes Awaiting Triage (%d) ===\n", len(rawNotes))
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			for _, n := range rawNotes {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", n.ID[:7], n.Note, n.Type, n.UpdatedAt.Format("2006-01-02 15:04"))
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", utils.ShortID(n.ID), n.Note, n.Type, n.UpdatedAt.Format("2006-01-02 15:04"))
 			}
 			w.Flush()
 			fmt.Println()
@@ -46,7 +46,7 @@ var inboxCmd = &cobra.Command{
 			fmt.Printf("=== Unpromoted Daily Logs (%d) ===\n", len(unpromotedLogs))
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			for _, l := range unpromotedLogs {
-				fmt.Fprintf(w, "%s\t%s\t%s\n", l.ID[:7], l.Content, l.CreatedAt.Format("2006-01-02 15:04"))
+				fmt.Fprintf(w, "%s\t%s\t%s\n", utils.ShortID(l.ID), l.Content, l.CreatedAt.Format("2006-01-02 15:04"))
 			}
 			w.Flush()
 			fmt.Println()
@@ -76,7 +76,7 @@ var triageCmd = &cobra.Command{
 
 		for i, n := range rawNotes {
 			fmt.Printf("--------------------------------------------------\n")
-			fmt.Printf("[%d/%d] Note: [%s] %s (%s)\n", i+1, len(rawNotes), n.ID[:7], n.Note, n.Type)
+			fmt.Printf("[%d/%d] Note: [%s] %s (%s)\n", i+1, len(rawNotes), utils.ShortID(n.ID), n.Note, n.Type)
 			if n.NoteFlesh != "" {
 				fmt.Printf("Flesh: %s\n", n.NoteFlesh)
 			}

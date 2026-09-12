@@ -9,24 +9,13 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/tsusheel/kb-cli/db"
 	"github.com/tsusheel/kb-cli/sync"
 	"github.com/tsusheel/kb-cli/utils"
 )
 
 func buildPostgresConnStr() (string, error) {
-	rawURL := viper.GetString("remote.postgres_url")
-	if rawURL == "" {
-		rawURL = viper.GetString("postgres_url")
-	}
-	if rawURL == "" {
-		rawURL = os.Getenv("KB_POSTGRES_URL")
-	}
-	if rawURL == "" {
-		rawURL = os.Getenv("DATABASE_URL")
-	}
-
+	rawURL := utils.GetPostgresURL()
 	if rawURL == "" {
 		return "", fmt.Errorf("remote PostgreSQL URL is not configured. Run 'kb config setup' or 'kb config set remote.postgres_url <url>'")
 	}
@@ -165,28 +154,10 @@ var syncStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Display remote synchronization and connection status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		rawURL := viper.GetString("remote.postgres_url")
-		if rawURL == "" {
-			rawURL = viper.GetString("postgres_url")
-		}
-		if rawURL == "" {
-			rawURL = os.Getenv("KB_POSTGRES_URL")
-		}
-		if rawURL == "" {
-			rawURL = os.Getenv("DATABASE_URL")
-		}
-
+		rawURL := utils.GetPostgresURL()
 		hasPass := utils.HasSecret("postgres_password") || strings.Contains(rawURL, ":")
 		lastSync, _ := db.GetLastSyncedAt("postgres")
-
-		// Mask password in displayed URL
-		displayURL := rawURL
-		if parsed, err := url.Parse(rawURL); err == nil && parsed.User != nil {
-			if _, pSet := parsed.User.Password(); pSet {
-				parsed.User = url.UserPassword(parsed.User.Username(), "******")
-				displayURL = parsed.String()
-			}
-		}
+		displayURL := utils.MaskURL(rawURL)
 
 		fmt.Println("=== PostgreSQL Remote Sync Status ===")
 		if displayURL != "" {

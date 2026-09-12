@@ -12,7 +12,7 @@ A fast, local-first personal knowledge base and second brain CLI with embedded S
 - **Title Editing & Renaming**: Update note titles directly without opening an editor (`kb rename <id> "new title"`, `kb edit <id> "new title"`).
 - **Temporal Stream & Daily Logs**: Micro-logging throughout the day (`kb log "entry"`, `kb today`) with one-command promotion to permanent notes (`kb promote <id>`).
 - **Inbox & Interactive Triage**: Accumulate raw thoughts chaotically, then rapidly triage, refine, or tag them (`kb inbox`, `kb triage`).
-- **Non-Destructive Soft Deletes**: Soft-delete notes and daily logs with audit trails and fuzzy-finder fallback (`kb delete [id]`, `kb rm [id]`, `kb delete log <id>`).
+- **Non-Destructive Soft Deletes**: Soft-delete notes and daily logs with audit trails and fuzzy-finder fallback (`kb delete [id]`, `kb rm [id]`).
 - **Local-First PostgreSQL Sync**: Two-way encrypted synchronization between local SQLite and remote PostgreSQL (`kb sync`, `kb sync push`, `kb sync pull`, `kb sync status`).
 - **Hardware/OS Keyring Secrets**: Sensitive passwords are never stored in plaintext `config.yaml`; encrypted in OS Credential Manager (`kb config set-secret`).
 - **Full-Text Search (FTS5)**: Instant search across note titles and content bodies with relevance ranking (`kb search "query"`, `kb find "query"`).
@@ -74,8 +74,9 @@ kb delete a1b2c3d --reason "superseded by new spec"
 # Fuzzy-find and select a note to delete (if ID omitted):
 kb delete
 
-# Delete a specific daily log:
-kb delete log 6a178a8
+# Delete a daily log:
+kb delete 6a178a8
+kb rm 6a178a8
 ```
 
 ---

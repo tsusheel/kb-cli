@@ -214,7 +214,8 @@ kb rm a1b2c3d --reason "superseded by new architecture"
 kb delete
 
 # Delete a daily log
-kb delete log 6a178a8
+kb delete 6a178a8
+kb rm 6a178a8
 ```
 
 ### 4. Daily Logging & Stream

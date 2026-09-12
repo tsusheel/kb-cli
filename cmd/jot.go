@@ -56,7 +56,7 @@ func jotThought(text string, noteType string, noteStatus string, due string, are
 		return fmt.Errorf("failed to save jotted note: %w", err)
 	}
 
-	fmt.Printf("Jotted [%s] (%s): %s\n", n.ID[:7], n.Type, n.Note)
+	fmt.Printf("Jotted [%s] (%s): %s\n", utils.ShortID(n.ID), n.Type, n.Note)
 	return nil
 }
 

@@ -7,6 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
+	"github.com/tsusheel/kb-cli/models"
+	"github.com/tsusheel/kb-cli/utils"
 )
 
 var (
@@ -44,22 +46,21 @@ var listCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		for _, n := range notes {
-			id := n.ID
-			if len(id) > 7 {
-				id = id[:7]
-			}
-			displayNote := n.Note
-			if displayNote == "" {
-				displayNote = "<Untitled>"
-			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", id, displayNote, n.Type, n.Status, n.UpdatedAt.Format("2006-01-02 15:04"))
-		}
-		w.Flush()
-
+		printNotesTable(notes)
 		return nil
 	},
+}
+
+func printNotesTable(notes []models.Note) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	for _, n := range notes {
+		displayNote := n.Note
+		if displayNote == "" {
+			displayNote = "<Untitled>"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", utils.ShortID(n.ID), displayNote, n.Type, n.Status, n.UpdatedAt.Format("2006-01-02 15:04"))
+	}
+	w.Flush()
 }
 
 func init() {

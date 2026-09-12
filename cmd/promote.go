@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
 	"github.com/tsusheel/kb-cli/models"
+	"github.com/tsusheel/kb-cli/utils"
 )
 
 var (
@@ -25,12 +26,7 @@ var promoteCmd = &cobra.Command{
 			return err
 		}
 
-		logShortID := logID
-		if len(logShortID) > 7 {
-			logShortID = logShortID[:7]
-		}
-
-		fmt.Printf("Successfully promoted log [%s] -> Note [%s] (%s): %s\n", logShortID, n.ID[:7], n.Type, n.Note)
+		fmt.Printf("Successfully promoted log [%s] -> Note [%s] (%s): %s\n", utils.ShortID(logID), utils.ShortID(n.ID), n.Type, n.Note)
 		return nil
 	},
 }

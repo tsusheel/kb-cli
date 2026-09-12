@@ -2,15 +2,48 @@ package utils
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"syscall"
 
+	"github.com/spf13/viper"
 	"github.com/zalando/go-keyring"
 	"golang.org/x/term"
 )
 
 const ServiceName = "kb-cli"
+
+// GetPostgresURL resolves the PostgreSQL connection URL from viper config or environment variables.
+func GetPostgresURL() string {
+	rawURL := viper.GetString("remote.postgres_url")
+	if rawURL == "" {
+		rawURL = viper.GetString("postgres_url")
+	}
+	if rawURL == "" {
+		rawURL = os.Getenv("KB_POSTGRES_URL")
+	}
+	if rawURL == "" {
+		rawURL = os.Getenv("DATABASE_URL")
+	}
+	return rawURL
+}
+
+// MaskURL hides sensitive passwords in database connection strings for safe display.
+func MaskURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.User == nil {
+		return rawURL
+	}
+	if _, hasPass := parsed.User.Password(); hasPass {
+		parsed.User = url.UserPassword(parsed.User.Username(), "******")
+		return parsed.String()
+	}
+	return rawURL
+}
 
 // NormalizeEnvKey converts keys like "postgres.password" or "db_password" to "KB_POSTGRES_PASSWORD"
 func NormalizeEnvKey(key string) string {
@@ -64,4 +97,12 @@ func PromptSecret(promptText string) (string, error) {
 		return "", fmt.Errorf("failed to read secret input: %w", err)
 	}
 	return strings.TrimSpace(string(bytePassword)), nil
+}
+
+// ShortID truncates full UUIDs to 7 characters for clean terminal display.
+func ShortID(id string) string {
+	if len(id) > 7 {
+		return id[:7]
+	}
+	return id
 }

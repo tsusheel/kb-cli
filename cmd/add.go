@@ -67,7 +67,7 @@ var addCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Printf("Successfully created note [%s]\n", id[:7])
+		fmt.Printf("Successfully created note [%s]\n", utils.ShortID(id))
 		return nil
 	},
 }

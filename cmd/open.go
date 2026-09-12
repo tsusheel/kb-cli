@@ -7,6 +7,7 @@ import (
 	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
+	"github.com/tsusheel/kb-cli/utils"
 )
 
 var openCmd = &cobra.Command{
@@ -59,7 +60,7 @@ var openCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("=========== [%s] ===========\n", n.ID[:7])
+		fmt.Printf("=========== [%s] ===========\n", utils.ShortID(n.ID))
 		if n.Note != "" {
 			fmt.Printf("Note: %s\n", n.Note)
 		}
@@ -103,10 +104,7 @@ var openCmd = &cobra.Command{
 					dir = "<--"
 				}
 
-				otherNoteDisplay := otherID
-				if len(otherNoteDisplay) > 7 {
-					otherNoteDisplay = otherNoteDisplay[:7]
-				}
+				otherNoteDisplay := utils.ShortID(otherID)
 				if lNote, err := db.GetNote(otherID); err == nil && lNote.Note != "" {
 					otherNoteDisplay = lNote.Note
 				}

@@ -66,7 +66,7 @@ Examples:
   kb delete
 
   # Delete a daily log:
-  kb delete log 6a178a8`,
+  kb delete 6a178a8`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			// Fuzzy finder mode
@@ -106,62 +106,8 @@ Examples:
 	},
 }
 
-var deleteLogCmd = &cobra.Command{
-	Use:     "log <id>",
-	Short:   "Soft-delete a specific daily log by ID",
-	Args:    cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		reason := deleteReason
-		if reason == "" {
-			reason = "deleted by user"
-		}
-		l, err := db.GetDailyLog(args[0])
-		if err != nil {
-			return err
-		}
-		if err := db.SoftDeleteDailyLog(l.ID, reason); err != nil {
-			return fmt.Errorf("failed deleting daily log: %w", err)
-		}
-		logContent := l.Content
-		if len(logContent) > 40 {
-			logContent = logContent[:37] + "..."
-		}
-		fmt.Printf("✔ Soft-deleted daily log [%s] %s\n", l.ID[:7], logContent)
-		return nil
-	},
-}
-
-var deleteNoteCmd = &cobra.Command{
-	Use:     "note <id>",
-	Short:   "Soft-delete a specific note by ID",
-	Args:    cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		reason := deleteReason
-		if reason == "" {
-			reason = "deleted by user"
-		}
-		n, err := db.GetNote(args[0])
-		if err != nil {
-			return err
-		}
-		if err := db.SoftDeleteNote(n.ID, reason); err != nil {
-			return fmt.Errorf("failed deleting note: %w", err)
-		}
-		fmt.Printf("✔ Soft-deleted note [%s] %s\n", n.ID[:7], n.Note)
-		return nil
-	},
-}
-
 func init() {
 	deleteCmd.Flags().StringVarP(&deleteReason, "reason", "r", "deleted by user", "Attribution reason for soft delete")
-	deleteLogCmd.Flags().StringVarP(&deleteReason, "reason", "r", "deleted by user", "Attribution reason for soft delete")
-	deleteNoteCmd.Flags().StringVarP(&deleteReason, "reason", "r", "deleted by user", "Attribution reason for soft delete")
-
 	deleteCmd.ValidArgsFunction = completeNoteIDs
-	deleteNoteCmd.ValidArgsFunction = completeNoteIDs
-	deleteLogCmd.ValidArgsFunction = completeUnpromotedLogIDs
-
-	deleteCmd.AddCommand(deleteLogCmd)
-	deleteCmd.AddCommand(deleteNoteCmd)
 	rootCmd.AddCommand(deleteCmd)
 }

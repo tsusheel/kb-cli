@@ -116,12 +116,7 @@ var configListCmd = &cobra.Command{
 			val := viper.GetString(k)
 			// Mask passwords in URLs if any
 			if strings.Contains(k, "url") || strings.Contains(k, "conn") {
-				if parsed, err := url.Parse(val); err == nil && parsed.User != nil {
-					if _, pSet := parsed.User.Password(); pSet {
-						parsed.User = url.UserPassword(parsed.User.Username(), "******")
-						val = parsed.String()
-					}
-				}
+				val = utils.MaskURL(val)
 			}
 			fmt.Fprintf(w, "%s\t%s\tconfig.yaml\n", k, val)
 		}
@@ -150,10 +145,7 @@ var configSetupCmd = &cobra.Command{
 		fmt.Println()
 
 		// 1. PostgreSQL Connection URL
-		currentURL := viper.GetString("remote.postgres_url")
-		if currentURL == "" {
-			currentURL = viper.GetString("postgres_url")
-		}
+		currentURL := utils.GetPostgresURL()
 		if currentURL != "" {
 			fmt.Printf("PostgreSQL Connection URL [%s]: ", currentURL)
 		} else {

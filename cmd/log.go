@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
+	"github.com/tsusheel/kb-cli/utils"
 )
 
 var showAllLogs bool
@@ -26,13 +27,9 @@ func displayTodayLogs(date time.Time, includePromoted bool) error {
 	for _, l := range logs {
 		status := ""
 		if l.NoteID != "" {
-			noteShortID := l.NoteID
-			if len(noteShortID) > 7 {
-				noteShortID = noteShortID[:7]
-			}
-			status = fmt.Sprintf(" (promoted -> [%s])", noteShortID)
+			status = fmt.Sprintf(" (promoted -> [%s])", utils.ShortID(l.NoteID))
 		}
-		fmt.Printf("%s  [%s]  %s%s\n", l.CreatedAt.Format("15:04"), l.ID[:7], l.Content, status)
+		fmt.Printf("%s  [%s]  %s%s\n", l.CreatedAt.Format("15:04"), utils.ShortID(l.ID), l.Content, status)
 	}
 	fmt.Println("=================================")
 	return nil

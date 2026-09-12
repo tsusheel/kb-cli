@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
+	"github.com/tsusheel/kb-cli/utils"
 )
 
 // completeNoteIDs returns active note IDs with titles as descriptions (e.g. "2d64a5a\tnew note")
@@ -17,10 +18,7 @@ func completeNoteIDs(cmd *cobra.Command, args []string, toComplete string) ([]st
 
 	var completions []string
 	for _, n := range notes {
-		shortID := n.ID
-		if len(shortID) > 7 {
-			shortID = shortID[:7]
-		}
+		shortID := utils.ShortID(n.ID)
 		if strings.HasPrefix(shortID, toComplete) || toComplete == "" {
 			title := n.Note
 			if len(title) > 35 {
@@ -41,10 +39,7 @@ func completeUnpromotedLogIDs(cmd *cobra.Command, args []string, toComplete stri
 
 	var completions []string
 	for _, l := range logs {
-		shortID := l.ID
-		if len(shortID) > 7 {
-			shortID = shortID[:7]
-		}
+		shortID := utils.ShortID(l.ID)
 		if strings.HasPrefix(shortID, toComplete) || toComplete == "" {
 			content := l.Content
 			if len(content) > 35 {

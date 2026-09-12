@@ -89,7 +89,7 @@ Examples:
 			return fmt.Errorf("failed to update note: %w", err)
 		}
 
-		fmt.Printf("Successfully updated note [%s] %s\n", n.ID[:7], n.Note)
+		fmt.Printf("Successfully updated note [%s] %s\n", utils.ShortID(n.ID), n.Note)
 		return nil
 	},
 }
