@@ -1,33 +1,36 @@
 # Knowledge Base CLI (`kb-cli`)
 
-A fast, SQLite-backed personal knowledge base and second brain CLI with built-in **Model Context Protocol (MCP)** server connectivity for AI agents.
+A fast, local-first personal knowledge base and second brain CLI with embedded SQLite storage, remote **PostgreSQL** synchronization, and built-in **Model Context Protocol (MCP)** server connectivity for AI agents.
 
 ---
 
 ## Key Features
 
 - **Two-Speed Thought Capture**:
-  - **Instant Jot**: Fast `< 50ms` capture directly from the terminal without opening an editor (`kb jot "idea"`, `kb "thought"`).
-  - **Deep Fleshing**: Dedicated editor workflow to write and edit detailed markdown bodies (`kb add`, `kb edit <id>`).
+  - **Instant Jot**: Fast `< 50ms` capture directly from the terminal without opening an editor (`kb "thought"`, `kb jot "idea"`).
+  - **Deep Fleshing**: Dedicated editor workflow (`$EDITOR`) to write and edit detailed markdown bodies (`kb add`, `kb edit <id>`, `kb flesh <id>`).
+- **Title Editing & Renaming**: Update note titles directly without opening an editor (`kb rename <id> "new title"`, `kb edit <id> "new title"`).
 - **Temporal Stream & Daily Logs**: Micro-logging throughout the day (`kb log "entry"`, `kb today`) with one-command promotion to permanent notes (`kb promote <id>`).
 - **Inbox & Interactive Triage**: Accumulate raw thoughts chaotically, then rapidly triage, refine, or tag them (`kb inbox`, `kb triage`).
-- **Full-Text Search (FTS5)**: Instant search across note titles and content bodies with relevance ranking.
+- **Non-Destructive Soft Deletes**: Soft-delete notes and daily logs with audit trails and fuzzy-finder fallback (`kb delete [id]`, `kb rm [id]`, `kb delete log <id>`).
+- **Local-First PostgreSQL Sync**: Two-way encrypted synchronization between local SQLite and remote PostgreSQL (`kb sync`, `kb sync push`, `kb sync pull`, `kb sync status`).
+- **Hardware/OS Keyring Secrets**: Sensitive passwords are never stored in plaintext `config.yaml`; encrypted in OS Credential Manager (`kb config set-secret`).
+- **Full-Text Search (FTS5)**: Instant search across note titles and content bodies with relevance ranking (`kb search "query"`, `kb find "query"`).
 - **Clean Text & Relational Graph**: Prose stays pure and readable; tags and links live in the database metadata layer without markup pollution.
-- **Soft Deletes & Audit Trail**: Notes and logs are non-destructively soft-deleted with timestamps and deletion attribution (e.g. `deleted by AI`).
 - **AI Agent Connectivity (MCP Server)**: Run `kb serve` / `kb mcp` to connect `kb-cli` as an MCP server with Claude Desktop, Antigravity, Cursor, Cline, or any MCP-compliant AI assistant.
 
 ---
 
 ## CLI Command Reference
 
-### 1. Instant Jot (`kb jot` / `kb <thought>`)
+### 1. Instant Jot (`kb <thought>` / `kb jot`)
 Capture fleeting thoughts instantly without opening an editor:
 ```bash
 # Direct positional jot
 kb "Explore SQLite WAL mode performance"
 
-# With type, status, and due date
-kb jot "Implement Raft log compaction" --type todo --due "tomorrow"
+# With type, status, area, and due date
+kb jot "Implement Raft log compaction" --type todo --due "tomorrow" --area work
 kb jot "Graph neural networks for note recommendation" --type idea
 ```
 
@@ -36,45 +39,73 @@ kb jot "Graph neural networks for note recommendation" --type idea
 ### 2. Add Note (`kb add`)
 Create a new note and open your configured editor (`$EDITOR` or default `notepad`/`vi`) to write note flesh:
 ```bash
-kb add -n "Fix database migrations" --type todo --target "tomorrow" --area work
+kb add -n "Fix database migrations" --type todo --due "tomorrow" --area work
 ```
 
 ---
 
-### 3. Edit / Flesh Note (`kb edit` / `kb flesh`)
-Open `$EDITOR` to write or edit the detailed body (`note_flesh`) of an existing note:
+### 3. Edit & Rename Note (`kb edit` / `kb rename` / `kb flesh`)
+Update titles, metadata flags, or open `$EDITOR` to write/edit the detailed body (`note_flesh`):
 ```bash
+# Rename / update title directly:
+kb rename a1b2c3d "Updated Note Title"
+kb edit a1b2c3d "Updated Note Title"
+
+# Update title and metadata flags:
+kb edit a1b2c3d -n "New Title" --status completed --type project
+
+# Open $EDITOR to edit detailed body (note flesh):
 kb edit a1b2c3d
-# or
 kb flesh a1b2c3d
 ```
 
 ---
 
-### 4. Daily Stream & Micro-Logs (`kb log` / `kb today`)
+### 4. Delete Notes & Logs (`kb delete` / `kb rm`)
+Soft-delete notes or logs non-destructively with audit trail:
+```bash
+# Delete a note by ID:
+kb delete a1b2c3d
+kb rm a1b2c3d
+
+# Delete with custom attribution reason:
+kb delete a1b2c3d --reason "superseded by new spec"
+
+# Fuzzy-find and select a note to delete (if ID omitted):
+kb delete
+
+# Delete a specific daily log:
+kb delete log 6a178a8
+```
+
+---
+
+### 5. Daily Stream & Micro-Logs (`kb log` / `kb today`)
 Record timestamped micro-logs throughout your workday and view today's chronological stream:
 ```bash
 # Append micro-logs
 kb log "Finished reviewing PR for MCP protocol"
 kb log "Benchmarked query latency: 1.2ms average"
 
-# View today's timeline
-kb today
-# or
+# View today's timeline (unpromoted only)
 kb log
+
+# View all logs including promoted ones
+kb log -a
+kb today
 ```
 
 ---
 
-### 5. Promote Log to Note (`kb promote`)
+### 6. Promote Log to Note (`kb promote`)
 Promote a daily log entry non-interactively into a permanent, typed `Note` in `< 50ms`:
 ```bash
-kb promote 08db3db --type project
+kb promote 08db3db --type project --status active
 ```
 
 ---
 
-### 6. Inbox & Triage (`kb inbox` / `kb triage`)
+### 7. Inbox & Triage (`kb inbox` / `kb triage`)
 View all unrefined raw thoughts and unpromoted logs, or launch the interactive terminal triage wizard:
 ```bash
 # View pending raw items
@@ -86,19 +117,21 @@ kb triage
 
 ---
 
-### 7. List Notes (`kb list` / `kb ls`)
-List notes with optional filters:
+### 8. List Notes (`kb list` / `kb ls`)
+List notes with optional filters for type, status, or area:
 ```bash
 kb list
-kb list --notes      # Only notes
-kb list --projects   # Only projects
-kb list --todos      # Only todos
-kb list --type idea  # Filter by any custom note type
+kb list --notes              # Only notes
+kb list --projects           # Only projects
+kb list --todos              # Only todos
+kb list --type idea          # Filter by note type
+kb list --status completed   # Filter by status
+kb list --area work          # Filter by area
 ```
 
 ---
 
-### 8. Open Note (`kb open` / `kb view`)
+### 9. Open Note (`kb open` / `kb view`)
 View full note contents, metadata, tags, and links. Uses interactive fuzzy-finder if no ID is passed:
 ```bash
 kb open
@@ -107,15 +140,16 @@ kb open a1b2c3d
 
 ---
 
-### 9. Search Notes (`kb search` / `kb s` / `kb find`)
+### 10. Search Notes (`kb search` / `kb find`)
 Fast full-text search across titles and note bodies using SQLite FTS5:
 ```bash
 kb search "sqlite migrations"
+kb find "postgres sync"
 ```
 
 ---
 
-### 10. Link Notes (`kb link`)
+### 11. Link Notes (`kb link`)
 Create a directional semantic link between two notes:
 ```bash
 kb link <from_id> <to_id> --type depends_on
@@ -124,7 +158,47 @@ Supported link types: `related_to`, `part_of`, `inspired_by`, `depends_on`, `sup
 
 ---
 
-### 11. Start MCP Server (`kb serve` / `kb mcp`)
+### 12. Remote PostgreSQL Synchronization (`kb sync`)
+Two-way synchronization between local SQLite and remote PostgreSQL:
+```bash
+# Two-way sync (push local + pull remote)
+kb sync
+
+# Push local modifications only
+kb sync push
+
+# Pull remote modifications only
+kb sync pull
+
+# View sync status and pending change counts
+kb sync status
+
+# Test connection to remote PostgreSQL
+kb sync test
+```
+
+---
+
+### 13. Configuration & Secrets (`kb config`)
+Manage configuration settings and hardware-encrypted OS Keyring secrets:
+```bash
+# Interactive setup wizard for remote sync
+kb config setup
+
+# Set a public configuration value
+kb config set date_format "2006-01-02"
+
+# Securely store a database password in OS Keyring (masked input)
+kb config set-secret postgres_password
+
+# Inspect current configuration
+kb config list
+kb config get remote.postgres_url
+```
+
+---
+
+### 14. Start MCP Server (`kb serve` / `kb mcp`)
 Starts the Model Context Protocol (MCP) server over standard I/O (`stdio`):
 ```bash
 kb serve
@@ -194,9 +268,4 @@ When running as an MCP server, `kb-cli` provides the following tools:
 
 - **Config File**: `~/.config/kb/config.yaml`
 - **Database File**: `~/.config/kb/kb.db` (or custom `base_path` specified in `config.yaml`)
-- **Default Config**:
-  ```yaml
-  app_name: kb-app
-  base_path: ~/.config/kb
-  date_format: 2006-01-02
-  ```
+- **Keyring Service**: `kb-cli` in Windows Credential Manager / macOS Keychain / Linux Secret Service

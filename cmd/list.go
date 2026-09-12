@@ -14,6 +14,8 @@ var (
 	listProjectsFlag bool
 	listTodosFlag    bool
 	listTypeFlag     string
+	listStatusFlag   string
+	listAreaFlag     string
 )
 
 var listCmd = &cobra.Command{
@@ -32,7 +34,7 @@ var listCmd = &cobra.Command{
 			filterType = "todo"
 		}
 
-		notes, err := db.ListNotes(filterType)
+		notes, err := db.ListNotesExtended(filterType, listStatusFlag, listAreaFlag, false)
 		if err != nil {
 			return err
 		}
@@ -65,6 +67,11 @@ func init() {
 	listCmd.Flags().BoolVarP(&listProjectsFlag, "projects", "p", false, "List only projects")
 	listCmd.Flags().BoolVarP(&listTodosFlag, "todos", "d", false, "List only todos")
 	listCmd.Flags().StringVarP(&listTypeFlag, "type", "t", "", "Filter by note type (e.g. todo, project, note, idea)")
+	listCmd.Flags().StringVarP(&listStatusFlag, "status", "s", "", "Filter by status (e.g. active, raw, refined, completed, archived)")
+	listCmd.Flags().StringVarP(&listAreaFlag, "area", "a", "", "Filter by area (e.g. work, personal, finance)")
+
 	listCmd.RegisterFlagCompletionFunc("type", completeNoteTypes)
+	listCmd.RegisterFlagCompletionFunc("status", completeNoteStatuses)
+	listCmd.RegisterFlagCompletionFunc("area", completeAreas)
 	rootCmd.AddCommand(listCmd)
 }

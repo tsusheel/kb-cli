@@ -232,7 +232,7 @@ func SoftDeleteDailyLog(id string, reason string) error {
 	}
 
 	if reason == "" {
-		reason = "deleted by AI"
+		reason = "deleted"
 	}
 
 	now := time.Now()

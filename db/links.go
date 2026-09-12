@@ -28,7 +28,7 @@ func AddLink(fromID string, toID string, linkType models.LinkType) error {
 
 func SoftDeleteLink(linkID string, reason string) error {
 	if reason == "" {
-		reason = "deleted by AI"
+		reason = "deleted"
 	}
 	now := time.Now()
 	query := `UPDATE links SET deleted_at = ?, deleted_note = ? WHERE id = ?`

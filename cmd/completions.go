@@ -96,6 +96,8 @@ func completeLinkTypes(cmd *cobra.Command, args []string, toComplete string) ([]
 		"inspired_by\tOrigin or inspiration source",
 		"supports\tSupporting evidence or reasoning",
 		"contradicts\tConflicting viewpoint or trade-off",
+		"about\tSubject matter or conceptual focus",
+		"created_by\tAttribution or author relationship",
 	}
 	return linkTypes, cobra.ShellCompDirectiveNoFileComp
 }

@@ -103,7 +103,10 @@ var openCmd = &cobra.Command{
 					dir = "<--"
 				}
 
-				otherNoteDisplay := otherID[:7]
+				otherNoteDisplay := otherID
+				if len(otherNoteDisplay) > 7 {
+					otherNoteDisplay = otherNoteDisplay[:7]
+				}
 				if lNote, err := db.GetNote(otherID); err == nil && lNote.Note != "" {
 					otherNoteDisplay = lNote.Note
 				}

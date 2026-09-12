@@ -74,10 +74,10 @@ var addCmd = &cobra.Command{
 
 func init() {
 	addCmd.Flags().StringVarP(&noteText, "note", "n", "", "Summary or title of the note")
-	addCmd.Flags().StringVar(&noteDue, "target", "", "Due / target date (e.g., 'today', 'tomorrow', 'monday', '+3d', or formatted date)")
-	addCmd.Flags().StringVar(&noteType, "type", string(models.DefaultNote), "Type of the note")
-	addCmd.Flags().StringVar(&noteArea, "area", "", "Area of the note")
-	addCmd.Flags().StringVar(&noteStatus, "status", string(models.Active), "Status of the note")
+	addCmd.Flags().StringVarP(&noteDue, "due", "d", "", "Due / target date (e.g., 'today', 'tomorrow', 'monday', '+3d', or formatted date)")
+	addCmd.Flags().StringVarP(&noteType, "type", "t", string(models.DefaultNote), "Type of the note")
+	addCmd.Flags().StringVarP(&noteArea, "area", "a", "", "Area of the note")
+	addCmd.Flags().StringVarP(&noteStatus, "status", "s", string(models.Active), "Status of the note")
 	addCmd.Flags().StringSliceVar(&noteTags, "tags", []string{}, "Tags for the note")
 
 	addCmd.RegisterFlagCompletionFunc("type", completeNoteTypes)
