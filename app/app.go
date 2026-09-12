@@ -1,11 +1,11 @@
-package app 
+package app
 
 import (
 	"os"
 	"path/filepath"
 
-	"github.com/tsusheel/kb-cli/db"
 	"github.com/spf13/viper"
+	"github.com/tsusheel/kb-cli/db"
 )
 
 func InitApp() {
@@ -20,8 +20,7 @@ func InitApp() {
 	dbPath := filepath.Join(basePath, "kb.db")
 
 	db.InitDB(dbPath)
-	if err := db.RunMigrations(); err != nil {
+	if err := db.InitSchema(); err != nil {
 		panic(err)
 	}
 }
-

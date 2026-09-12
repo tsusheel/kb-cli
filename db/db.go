@@ -34,9 +34,13 @@ func InitDB(path string) {
 	}
 }
 
-func RunMigrations() error {
+func InitSchema() error {
 	_, err := DB.Exec(schemaSQL)
 	return err
+}
+
+func RunMigrations() error {
+	return InitSchema()
 }
 
 func CloseDB() error {
@@ -45,3 +49,4 @@ func CloseDB() error {
 	}
 	return nil
 }
+

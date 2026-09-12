@@ -37,36 +37,39 @@ Knowledge is not static; it matures over time.
 
 Notes can also track **`importance`** (1–5) and **`clarity`** (1–5), guiding both user review sessions and AI agents on what needs elaboration or immediate focus.
 
-### 1.4 Networked Thought (Graph over Tree)
-Insights rarely exist in isolation. `kb` treats knowledge as a directed semantic graph:
-- **Explicit Relationships**: Notes link to other notes with clear semantic types:
-  - `related_to`: Conceptual association.
-  - `depends_on`: Prerequisites and blockers.
-  - `part_of`: Component of a larger project or concept.
-  - `inspired_by`: Intellectual genealogy or source ideation.
-  - `supports` / `contradicts`: Dialectical reasoning and arguments.
-  - `about` / `created_by`: Contextual attribution.
-- **Cross-Cutting Tags**: Multi-dimensional tagging (`ai/mcp`, `golang/sqlite`, `reading/2026`) provides orthogonal discovery across types and areas.
+### 1.4 Clean Text & Relational Metadata (No Syntax Pollution)
+- **Pure Markdown Content**: Note summaries and note flesh remain clean, human-readable prose without embedded `#tag` or `[[wiki-link]]` markup clutter.
+- **Metadata in the Graph**: Tags, relationships, and links live in the relational database layer.
+- **Asynchronous Structuring**: Rapid capture happens without tagging or linking. Linking and tagging are deliberate curation steps performed afterward—either by the user during triage or autonomously by AI agents via MCP.
 
-### 1.5 Human + AI Symbiosis (Agent-First Architecture)
-`kb` is designed from the ground up as a shared workspace between the user and AI assistants:
+### 1.5 Two-Speed Capture (Instant Jot vs. Deep Fleshing)
+Human thought operates in two distinct modes:
+1. **Speed 1 (Instant Fleeting Jot)**: Rapidly jotting down a 1-line thought or task in milliseconds without editor interruption (`kb jot "headline"` or `kb "headline"`).
+2. **Speed 2 (Substantive Deep Dive)**: Opening the editor (`$EDITOR`) to elaborate, structure, and write detailed `note_flesh` on new or existing notes (`kb add`, `kb edit <id>`, `kb flesh <id>`).
+
+### 1.6 Temporal Stream & Promotion (Logs to Notes)
+- **Daily Stream (`kb log`)**: Micro-thoughts, work logs, and status updates are recorded in a lightweight chronological timeline throughout the day.
+- **Log-to-Note Promotion**: Not every thought starts as a full note. When a micro-log develops substance, it can be promoted (`kb promote <log_id>`) into a standalone, typed `models.Note` with its own lifecycle and flesh.
+
+### 1.7 Human + AI Symbiosis (Chaotic Capture -> Structured Knowledge)
+`kb` is designed from the ground up as a shared workspace between the human and AI assistants:
+- **Chaotic Human Capture, Structured AI Synthesis**: The human captures freely and chaotically in `raw` state. AI agents (via MCP) analyze, link related concepts, suggest tags, and assist in triaging the inbox.
 - **Model Context Protocol (MCP)**: AI agents connect natively via standard protocol tools (`list_notes`, `get_note`, `search_notes`, `create_note`, `update_note`, `delete_note`).
 - **Auditability & Safe Deletion**: Deletions are strictly non-destructive soft deletes with timestamps (`deleted_at`) and attribution reasons (`deleted_note` e.g., *"deleted by AI: task completed"*).
-- **Fast Search Retrieval**: SQLite FTS5 full-text indexing allows agents and humans to locate relevant context in milliseconds without scanning whole files.
 
-### 1.6 Local-First, Fast & Autonomous
+### 1.8 Local-First, Fast & Autonomous
 - **Self-Contained**: Powered by embedded SQLite schemas with zero external server dependencies.
 - **Ergonomic Ergonomics**: 7-character short IDs, editor integration (`$EDITOR`), fuzzy-finding (`kb open`), and flexible date parsing (`today`, `tomorrow`, `+3d`, `monday`).
 
 ---
 
-## 2. Note-Taking Guidelines
+## 2. Note-Taking & Triage Guidelines
 
-1. **Capture First, Organize Progressively**: Capture thoughts immediately in `raw` state. Structure and links can be added during review or with agent assistance.
-2. **One Primary Idea Per Note**: If a note covers multiple unrelated topics, split them and connect them with `related_to` or `part_of` links.
-3. **Make Titles Actionable or Descriptive**: Prefer `"Implement SQLite FTS5 for fuzzy search"` over `"Search feature"`.
-4. **Link Decisions to Context**: When making architectural choices, link the `decision` note to the relevant `project` and `concept` notes.
-5. **Use Target Dates Purposefully**: Set target dates on `todo` and `project` notes to maintain momentum across daily and weekly workflows.
+1. **Jot First, Flesh Out Later**: When in the flow state, jot down thoughts instantly without opening an editor. Elaborate `note_flesh` when in reflective mode.
+2. **Keep the Prose Clean**: Avoid embedding custom markup inside the note body. Use relational links and tags.
+3. **Log the Stream, Promote What Matters**: Use daily logs for micro-context. Promote impactful logs into permanent notes.
+4. **Regular Triage**: Keep `raw` capture friction-free by using inbox review and AI synthesis to move notes into `refined`, `in-progress`, or `completed`.
+5. **Let the Graph Connect Ideas**: Use semantic link types (`related_to`, `depends_on`, `part_of`, `inspired_by`, `supports`, `contradicts`) to preserve context across projects.
 
 ---
 
@@ -74,6 +77,7 @@ Insights rarely exist in isolation. `kb` treats knowledge as a directed semantic
 
 Code additions and refactorings in `kb` should align with these guidelines:
 - **Never perform destructive deletes**: All entity removals must preserve an audit trail via soft deletion columns (`deleted_at`, `deleted_note`).
+- **Maintain clean content boundaries**: Never inject custom bracketed link syntax or tags into note markdown text; keep metadata relational.
 - **Maintain CLI and MCP parity**: Any feature available via the CLI should be intuitively accessible to AI agents via MCP tools, and vice versa.
-- **Preserve zero-configuration reliability**: New database migrations, schema updates, or configurations must run automatically without breaking the user's workflow.
+- **Preserve zero-configuration reliability**: Database schemas and configurations initialize automatically on first run without friction.
 - **Optimize for readability and speed**: Queries must remain fast and lean, favoring lightweight structured JSON and efficient SQLite indexing.

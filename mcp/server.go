@@ -110,6 +110,36 @@ func registerTools(s *server.MCPServer) {
 		mcp.WithString("type", mcp.Description("Link type: 'related_to', 'part_of', 'inspired_by', 'depends_on', 'supports', 'contradicts', 'about', 'created_by' (default 'related_to')")),
 	)
 	s.AddTool(linkNotesTool, handleLinkNotes)
+
+	// 9. create_log
+	createLogTool := mcp.NewTool("create_log",
+		mcp.WithDescription("Append a timestamped micro-log to today's daily stream."),
+		mcp.WithString("content", mcp.Required(), mcp.Description("Log entry text")),
+	)
+	s.AddTool(createLogTool, handleCreateLog)
+
+	// 10. list_daily_logs
+	listDailyLogsTool := mcp.NewTool("list_daily_logs",
+		mcp.WithDescription("List daily stream micro-logs for today or a specific date."),
+		mcp.WithString("date", mcp.Description("Optional date (e.g., 'today', 'yesterday', '2026-09-06')")),
+		mcp.WithBoolean("include_promoted", mcp.Description("Whether to include logs that were already promoted to notes (default true)")),
+	)
+	s.AddTool(listDailyLogsTool, handleListDailyLogs)
+
+	// 11. promote_log
+	promoteLogTool := mcp.NewTool("promote_log",
+		mcp.WithDescription("Promote a daily log entry into a standalone permanent Note non-interactively."),
+		mcp.WithString("log_id", mcp.Required(), mcp.Description("ID of the daily log to promote")),
+		mcp.WithString("type", mcp.Description("Note type for the promoted note (default 'note')")),
+		mcp.WithString("status", mcp.Description("Status for the promoted note (default 'raw')")),
+	)
+	s.AddTool(promoteLogTool, handlePromoteLog)
+
+	// 12. get_inbox
+	getInboxTool := mcp.NewTool("get_inbox",
+		mcp.WithDescription("Get all raw unrefined notes and unpromoted daily logs awaiting triage."),
+	)
+	s.AddTool(getInboxTool, handleGetInbox)
 }
 
 func handleListNotes(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -482,6 +512,158 @@ func handleLinkNotes(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToo
 		"link_type": linkTypeStr,
 		"message":   fmt.Sprintf("Successfully linked [%s] --> [%s] as '%s'", fromID, toID, linkTypeStr),
 	}
+	data, _ := json.MarshalIndent(res, "", "  ")
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func handleCreateLog(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	content, err := req.RequireString("content")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	l, err := db.CreateDailyLog(content)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to create log: %v", err)), nil
+	}
+
+	res := map[string]interface{}{
+		"success":  true,
+		"id":       l.ID,
+		"short_id": l.ID[:7],
+		"time":     l.CreatedAt.Format("15:04"),
+		"message":  fmt.Sprintf("Logged [%s] at %s", l.ID[:7], l.CreatedAt.Format("15:04")),
+	}
+	data, _ := json.MarshalIndent(res, "", "  ")
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func handleListDailyLogs(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	dateStr := req.GetString("date", "")
+	includePromoted := req.GetBool("include_promoted", true)
+
+	queryDate := time.Now()
+	if dateStr != "" {
+		parsedDate, err := utils.ParseDate(dateStr)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid date format %q: %v", dateStr, err)), nil
+		}
+		queryDate = parsedDate
+	}
+
+	logs, err := db.GetDailyLogsForDate(queryDate, includePromoted)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to list daily logs: %v", err)), nil
+	}
+
+	type LogSummary struct {
+		ID        string    `json:"id"`
+		ShortID   string    `json:"short_id"`
+		Content   string    `json:"content"`
+		Time      string    `json:"time"`
+		CreatedAt time.Time `json:"created_at"`
+		NoteID    string    `json:"note_id,omitempty"`
+	}
+
+	var summaries []LogSummary
+	for _, l := range logs {
+		summaries = append(summaries, LogSummary{
+			ID:        l.ID,
+			ShortID:   l.ID[:7],
+			Content:   l.Content,
+			Time:      l.CreatedAt.Format("15:04"),
+			CreatedAt: l.CreatedAt,
+			NoteID:    l.NoteID,
+		})
+	}
+
+	data, err := json.MarshalIndent(summaries, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to serialize logs: %v", err)), nil
+	}
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func handlePromoteLog(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logID, err := req.RequireString("log_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	noteType := req.GetString("type", string(models.DefaultNote))
+	noteStatus := req.GetString("status", string(models.Raw))
+
+	n, err := db.PromoteDailyLog(logID, models.NoteType(noteType), models.Status(noteStatus))
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to promote log: %v", err)), nil
+	}
+
+	res := map[string]interface{}{
+		"success":       true,
+		"note_id":       n.ID,
+		"note_short_id": n.ID[:7],
+		"type":          n.Type,
+		"status":        n.Status,
+		"message":       fmt.Sprintf("Promoted log [%s] to Note [%s]", logID, n.ID[:7]),
+	}
+	data, _ := json.MarshalIndent(res, "", "  ")
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func handleGetInbox(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	rawNotes, err := db.ListNotesExtended("", string(models.Raw), "", false)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get raw notes: %v", err)), nil
+	}
+
+	unpromotedLogs, err := db.GetUnpromotedDailyLogs()
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get unpromoted logs: %v", err)), nil
+	}
+
+	type NoteItem struct {
+		ID        string    `json:"id"`
+		ShortID   string    `json:"short_id"`
+		Note      string    `json:"note"`
+		Type      string    `json:"type"`
+		UpdatedAt time.Time `json:"updated_at"`
+	}
+
+	type LogItem struct {
+		ID        string    `json:"id"`
+		ShortID   string    `json:"short_id"`
+		Content   string    `json:"content"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+
+	var notesList []NoteItem
+	for _, n := range rawNotes {
+		notesList = append(notesList, NoteItem{
+			ID:        n.ID,
+			ShortID:   n.ID[:7],
+			Note:      n.Note,
+			Type:      string(n.Type),
+			UpdatedAt: n.UpdatedAt,
+		})
+	}
+
+	var logsList []LogItem
+	for _, l := range unpromotedLogs {
+		logsList = append(logsList, LogItem{
+			ID:        l.ID,
+			ShortID:   l.ID[:7],
+			Content:   l.Content,
+			CreatedAt: l.CreatedAt,
+		})
+	}
+
+	res := map[string]interface{}{
+		"raw_notes_count": len(notesList),
+		"raw_notes":       notesList,
+		"logs_count":      len(logsList),
+		"unpromoted_logs": logsList,
+	}
+
 	data, _ := json.MarshalIndent(res, "", "  ")
 	return mcp.NewToolResultText(string(data)), nil
 }

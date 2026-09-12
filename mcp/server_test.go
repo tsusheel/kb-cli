@@ -18,8 +18,8 @@ func setupMCPTestDB(t *testing.T) {
 	t.Cleanup(func() {
 		db.CloseDB()
 	})
-	if err := db.RunMigrations(); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
+	if err := db.InitSchema(); err != nil {
+		t.Fatalf("failed to init schema: %v", err)
 	}
 }
 
@@ -197,5 +197,65 @@ func TestMCPTagsAndLinks(t *testing.T) {
 	}
 	if !strings.Contains(linkRes.Content[0].(mcp.TextContent).Text, "depends_on") {
 		t.Errorf("link response mismatch: %s", linkRes.Content[0].(mcp.TextContent).Text)
+	}
+}
+
+func TestMCPDailyLogsAndInbox(t *testing.T) {
+	setupMCPTestDB(t)
+	ctx := context.Background()
+
+	// 1. Test create_log
+	logRes, err := handleCreateLog(ctx, makeToolRequest("create_log", map[string]interface{}{
+		"content": "Worked on MCP protocol daily logs",
+	}))
+	if err != nil {
+		t.Fatalf("handleCreateLog failed: %v", err)
+	}
+	var logData map[string]interface{}
+	json.Unmarshal([]byte(logRes.Content[0].(mcp.TextContent).Text), &logData)
+	logID := logData["id"].(string)
+
+	// 2. Test list_daily_logs
+	listLogsRes, err := handleListDailyLogs(ctx, makeToolRequest("list_daily_logs", map[string]interface{}{
+		"date": "today",
+	}))
+	if err != nil {
+		t.Fatalf("handleListDailyLogs failed: %v", err)
+	}
+	if !strings.Contains(listLogsRes.Content[0].(mcp.TextContent).Text, "Worked on MCP protocol daily logs") {
+		t.Errorf("list_daily_logs did not return expected log: %s", listLogsRes.Content[0].(mcp.TextContent).Text)
+	}
+
+	// 3. Test get_inbox (should contain unpromoted log)
+	inboxRes, err := handleGetInbox(ctx, makeToolRequest("get_inbox", map[string]interface{}{}))
+	if err != nil {
+		t.Fatalf("handleGetInbox failed: %v", err)
+	}
+	if !strings.Contains(inboxRes.Content[0].(mcp.TextContent).Text, "Worked on MCP protocol daily logs") {
+		t.Errorf("get_inbox did not contain unpromoted log: %s", inboxRes.Content[0].(mcp.TextContent).Text)
+	}
+
+	// 4. Test promote_log non-interactively
+	promoteRes, err := handlePromoteLog(ctx, makeToolRequest("promote_log", map[string]interface{}{
+		"log_id": logID[:7],
+		"type":   "concept",
+		"status": "raw",
+	}))
+	if err != nil {
+		t.Fatalf("handlePromoteLog failed: %v", err)
+	}
+	promoteText := promoteRes.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(promoteText, "Promoted log") {
+		t.Errorf("promote_log response mismatch: %s", promoteText)
+	}
+
+	// 5. Test get_inbox after promotion (should show note in raw_notes and empty unpromoted_logs)
+	inboxRes2, _ := handleGetInbox(ctx, makeToolRequest("get_inbox", map[string]interface{}{}))
+	inboxText2 := inboxRes2.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(inboxText2, `"logs_count": 0`) {
+		t.Errorf("expected 0 unpromoted logs after promotion, got: %s", inboxText2)
+	}
+	if !strings.Contains(inboxText2, "Worked on MCP protocol daily logs") {
+		t.Errorf("expected promoted raw note in inbox, got: %s", inboxText2)
 	}
 }

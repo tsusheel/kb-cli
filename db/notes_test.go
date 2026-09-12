@@ -15,8 +15,8 @@ func setupTestDB(t *testing.T) {
 	t.Cleanup(func() {
 		CloseDB()
 	})
-	if err := RunMigrations(); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
+	if err := InitSchema(); err != nil {
+		t.Fatalf("failed to init schema: %v", err)
 	}
 }
 

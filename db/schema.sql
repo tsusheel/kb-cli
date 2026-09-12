@@ -38,6 +38,15 @@ CREATE TABLE IF NOT EXISTS links (
   deleted_note TEXT
 );
 
+CREATE TABLE IF NOT EXISTS daily_logs (
+  id TEXT PRIMARY KEY,
+  content TEXT,
+  note_id TEXT,
+  created_at DATETIME,
+  deleted_at DATETIME,
+  deleted_note TEXT
+);
+
 CREATE TABLE IF NOT EXISTS daily_notes (
   id TEXT PRIMARY KEY,
   date DATETIME,
@@ -51,4 +60,11 @@ CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
   note_flesh,
   note_id UNINDEXED
 );
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_notes_deleted_at ON notes(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_notes_type ON notes(type);
+CREATE INDEX IF NOT EXISTS idx_notes_status ON notes(status);
+CREATE INDEX IF NOT EXISTS idx_links_from_to ON links(from_note, to_note);
+CREATE INDEX IF NOT EXISTS idx_daily_logs_created_at ON daily_logs(created_at);
 
