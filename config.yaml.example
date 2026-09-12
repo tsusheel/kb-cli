@@ -1,6 +1,11 @@
-hacker: true
-hobbies:
-  - skateboarding
-  - snowboarding
-  - go
-name: steve
+# Knowledge Base (kb) Configuration File
+# Placed at ~/.config/kb/config.yaml
+
+# Application Identifier
+app_name: "kb-app"
+
+# Base directory where kb.db and data files are stored (defaults to ~/.config/kb)
+base_path: "~/.config/kb"
+
+# Preferred default date format for parsing / display
+date_format: "2006-01-02"
