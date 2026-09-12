@@ -175,7 +175,7 @@ kb jot "Graph neural networks for note recommendation" --type idea
 kb add -n "API Gateway Architecture" --type project --area work --tags "backend,arch"
 ```
 
-### 2. Viewing & Editing Notes
+### 2. Viewing, Editing & Renaming Notes
 
 ```bash
 # List all notes
@@ -188,12 +188,36 @@ kb list -t idea      # Filter by type
 kb open
 kb open a1b2c3d
 
+# Rename / edit note title directly:
+kb edit a1b2c3d "Updated Note Title"
+kb rename a1b2c3d "Updated Note Title"
+kb edit a1b2c3d -n "Updated Note Title" --status in-progress --type project
+
 # Open $EDITOR to write or update note flesh (body)
 kb edit a1b2c3d
 kb flesh a1b2c3d
 ```
 
-### 3. Daily Logging & Stream
+### 3. Deleting Notes & Logs
+
+All deletions are safe, non-destructive soft deletes with timestamps and attribution:
+
+```bash
+# Delete a note by ID
+kb delete a1b2c3d
+kb rm a1b2c3d
+
+# Delete with custom attribution reason
+kb rm a1b2c3d --reason "superseded by new architecture"
+
+# Interactive fuzzy selection (if ID is omitted)
+kb delete
+
+# Delete a daily log
+kb delete log 6a178a8
+```
+
+### 4. Daily Logging & Stream
 
 ```bash
 # Append a micro-log to today's stream

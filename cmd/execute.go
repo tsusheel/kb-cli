@@ -31,7 +31,7 @@ func isKnownCommand(arg string) bool {
 			}
 		}
 	}
-	if arg == "help" || arg == "__complete" || arg == "__completeNoDesc" {
+	if arg == "help" || arg == "completion" || arg == "__complete" || arg == "__completeNoDesc" {
 		return true
 	}
 	return false
