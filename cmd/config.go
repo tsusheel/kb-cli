@@ -263,6 +263,10 @@ var configSetupCmd = &cobra.Command{
 }
 
 func init() {
+	configSetCmd.ValidArgsFunction = completeConfigKeys
+	configGetCmd.ValidArgsFunction = completeConfigKeys
+	configSetSecretCmd.ValidArgsFunction = completeSecretKeys
+
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configSetSecretCmd)
 	configCmd.AddCommand(configGetCmd)

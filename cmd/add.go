@@ -79,5 +79,10 @@ func init() {
 	addCmd.Flags().StringVar(&noteArea, "area", "", "Area of the note")
 	addCmd.Flags().StringVar(&noteStatus, "status", string(models.Active), "Status of the note")
 	addCmd.Flags().StringSliceVar(&noteTags, "tags", []string{}, "Tags for the note")
+
+	addCmd.RegisterFlagCompletionFunc("type", completeNoteTypes)
+	addCmd.RegisterFlagCompletionFunc("status", completeNoteStatuses)
+	addCmd.RegisterFlagCompletionFunc("area", completeAreas)
+
 	rootCmd.AddCommand(addCmd)
 }

@@ -76,5 +76,10 @@ func init() {
 	jotCmd.Flags().StringVarP(&jotStatus, "status", "s", string(models.Raw), "Status (default 'raw')")
 	jotCmd.Flags().StringVarP(&jotDue, "due", "d", "", "Due / target date (e.g., 'today', 'tomorrow', 'monday', '+3d')")
 	jotCmd.Flags().StringVarP(&jotArea, "area", "a", "", "Area (work, finance, personal)")
+
+	jotCmd.RegisterFlagCompletionFunc("type", completeNoteTypes)
+	jotCmd.RegisterFlagCompletionFunc("status", completeNoteStatuses)
+	jotCmd.RegisterFlagCompletionFunc("area", completeAreas)
+
 	rootCmd.AddCommand(jotCmd)
 }

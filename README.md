@@ -58,6 +58,31 @@ go build -o kb.exe .
 ./kb --help
 ```
 
+### 3. Enable Shell Tab Auto-Completion (Optional but Recommended)
+
+`kb` supports intelligent tab auto-completion for commands, flags, note types, and dynamic note IDs:
+
+* **PowerShell (Windows)**:
+  ```powershell
+  # For current session:
+  kb completion powershell | Out-String | Invoke-Expression
+
+  # Or permanently add to your PowerShell profile:
+  Add-Content $PROFILE "`nInvoke-Expression (&kb completion powershell | Out-String)"
+  ```
+
+* **Bash (Linux/macOS)**:
+  ```bash
+  # In your ~/.bashrc:
+  source <(kb completion bash)
+  ```
+
+* **Zsh (macOS)**:
+  ```zsh
+  # In your ~/.zshrc:
+  source <(kb completion zsh)
+  ```
+
 ---
 
 ## Configuration & Secrets Management

@@ -120,5 +120,6 @@ var openCmd = &cobra.Command{
 }
 
 func init() {
+	openCmd.ValidArgsFunction = completeNoteIDs
 	rootCmd.AddCommand(openCmd)
 }

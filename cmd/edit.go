@@ -38,5 +38,6 @@ var editCmd = &cobra.Command{
 }
 
 func init() {
+	editCmd.ValidArgsFunction = completeNoteIDs
 	rootCmd.AddCommand(editCmd)
 }

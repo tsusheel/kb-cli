@@ -65,5 +65,6 @@ func init() {
 	listCmd.Flags().BoolVarP(&listProjectsFlag, "projects", "p", false, "List only projects")
 	listCmd.Flags().BoolVarP(&listTodosFlag, "todos", "d", false, "List only todos")
 	listCmd.Flags().StringVarP(&listTypeFlag, "type", "t", "", "Filter by note type (e.g. todo, project, note, idea)")
+	listCmd.RegisterFlagCompletionFunc("type", completeNoteTypes)
 	rootCmd.AddCommand(listCmd)
 }

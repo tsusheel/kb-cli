@@ -28,6 +28,8 @@ var linkCmd = &cobra.Command{
 }
 
 func init() {
+	linkCmd.ValidArgsFunction = completeNoteIDs
 	linkCmd.Flags().StringVarP(&linkTypeArg, "type", "t", string(models.RelatedTo), "Type of link (e.g., related_to, part_of, depends_on)")
+	linkCmd.RegisterFlagCompletionFunc("type", completeLinkTypes)
 	rootCmd.AddCommand(linkCmd)
 }
