@@ -70,9 +70,6 @@ func printNotesTable(notes []models.Note) {
 	utils.RenderNotesTable(notes, os.Stdout)
 }
 
-
-
-
 func init() {
 	listCmd.Flags().BoolVarP(&listNotesFlag, "notes", "n", false, "List only notes")
 	listCmd.Flags().BoolVarP(&listProjectsFlag, "projects", "p", false, "List only projects")

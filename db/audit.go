@@ -18,6 +18,7 @@ var ErrAuditAmbiguous = errors.New("ambiguous short id, multiple audit logs foun
 // RecordAudit records an audit revision entry for an entity (inside or outside a transaction).
 func RecordAudit(tx *sql.Tx, entityType, entityID string, action models.AuditAction, summary string, snapshot interface{}) error {
 	id := strings.ReplaceAll(uuid.New().String(), "-", "")
+	entityID = strings.ReplaceAll(entityID, "-", "")
 	now := time.Now()
 
 	var snapshotJSON string
@@ -118,6 +119,7 @@ func ComputeNoteDiffSummary(oldNote, newNote *models.Note) string {
 
 // GetAuditHistory retrieves the revision timeline for a specific entity.
 func GetAuditHistory(entityType, entityID string, limit int) ([]models.AuditEntry, error) {
+	entityID = strings.ReplaceAll(entityID, "-", "")
 	if limit <= 0 {
 		limit = 50
 	}
@@ -125,7 +127,7 @@ func GetAuditHistory(entityType, entityID string, limit int) ([]models.AuditEntr
 	query := `SELECT id, entity_type, entity_id, action, changes_summary, snapshot_json, created_at
 		FROM audit_logs
 		WHERE entity_type = ? AND entity_id = ?
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, rowid DESC
 		LIMIT ?`
 
 	rows, err := DB.Query(query, entityType, entityID, limit)
@@ -165,7 +167,7 @@ func GetRecentAuditHistory(limit int) ([]models.AuditEntry, error) {
 
 	query := `SELECT id, entity_type, entity_id, action, changes_summary, snapshot_json, created_at
 		FROM audit_logs
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, rowid DESC
 		LIMIT ?`
 
 	rows, err := DB.Query(query, limit)
@@ -199,12 +201,13 @@ func GetRecentAuditHistory(limit int) ([]models.AuditEntry, error) {
 
 // ResolveAuditID resolves short 7+ char prefixes to full 32-char UUIDs.
 func ResolveAuditID(id string) (string, error) {
-	if len(id) == 32 || len(id) == 36 {
-		return strings.ReplaceAll(id, "-", ""), nil
+	cleanID := strings.ReplaceAll(id, "-", "")
+	if len(cleanID) == 32 {
+		return cleanID, nil
 	}
 
 	query := `SELECT id FROM audit_logs WHERE id LIKE ?`
-	rows, err := DB.Query(query, id+"%")
+	rows, err := DB.Query(query, cleanID+"%")
 	if err != nil {
 		return "", err
 	}

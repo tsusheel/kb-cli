@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/tsusheel/kb-cli/models"
 )
 
@@ -15,6 +16,12 @@ var ErrNotFound = errors.New("note not found")
 var ErrAmbiguous = errors.New("ambiguous short id, multiple notes found")
 
 func CreateNote(n *models.Note) error {
+	if n.ID == "" {
+		n.ID = strings.ReplaceAll(uuid.New().String(), "-", "")
+	} else {
+		n.ID = strings.ReplaceAll(n.ID, "-", "")
+	}
+
 	tx, err := DB.Begin()
 	if err != nil {
 		return err
@@ -57,12 +64,13 @@ func CreateNote(n *models.Note) error {
 }
 
 func ResolveID(id string) (string, error) {
-	if len(id) == 36 { // full UUID
-		return id, nil
+	cleanID := strings.ReplaceAll(id, "-", "")
+	if len(cleanID) == 32 {
+		return cleanID, nil
 	}
 
 	query := `SELECT id FROM notes WHERE id LIKE ?`
-	rows, err := DB.Query(query, id+"%")
+	rows, err := DB.Query(query, cleanID+"%")
 	if err != nil {
 		return "", err
 	}

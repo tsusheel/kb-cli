@@ -49,7 +49,6 @@ var inboxCmd = &cobra.Command{
 	},
 }
 
-
 var triageCmd = &cobra.Command{
 	Use:   "triage",
 	Short: "Interactive triage wizard to process raw notes (today's notes by default, or all with -a/--all)",

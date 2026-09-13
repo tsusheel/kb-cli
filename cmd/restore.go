@@ -63,54 +63,9 @@ Examples:
   kb restore`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			var items []CLIItem
-
-			// 1. Deleted Notes
-			allNotes, err := db.ListNotesExtended("", "", "", true)
+			items, err := GetDeletedCLIItems()
 			if err != nil {
 				return err
-			}
-			for _, n := range allNotes {
-				if !n.DeletedAt.IsZero() {
-					displayTitle := n.Note
-					if displayTitle == "" {
-						displayTitle = "<Untitled>"
-					}
-					if n.DeletedNote != "" {
-						displayTitle = fmt.Sprintf("%s (%s)", displayTitle, n.DeletedNote)
-					}
-					items = append(items, CLIItem{
-						ID:        n.ID,
-						Type:      string(n.Type),
-						Display:   displayTitle,
-						Timestamp: n.DeletedAt.Format("2006-01-02 15:04"),
-						IsLog:     false,
-					})
-				}
-			}
-
-			// 2. Deleted Daily Logs
-			allLogs, err := db.GetDailyLogsFilter(nil, nil, true, true)
-			if err != nil {
-				return err
-			}
-			for _, l := range allLogs {
-				if !l.DeletedAt.IsZero() {
-					content := l.Content
-					if len(content) > 60 {
-						content = content[:57] + "..."
-					}
-					if l.DeletedNote != "" {
-						content = fmt.Sprintf("%s (%s)", content, l.DeletedNote)
-					}
-					items = append(items, CLIItem{
-						ID:        l.ID,
-						Type:      "log",
-						Display:   content,
-						Timestamp: l.DeletedAt.Format("2006-01-02 15:04"),
-						IsLog:     true,
-					})
-				}
 			}
 
 			if len(items) == 0 {

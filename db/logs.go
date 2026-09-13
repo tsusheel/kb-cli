@@ -63,12 +63,13 @@ func UpdateDailyLog(l *models.DailyLog) error {
 
 
 func ResolveLogID(id string) (string, error) {
-	if len(id) == 32 || len(id) == 36 {
-		return strings.ReplaceAll(id, "-", ""), nil
+	cleanID := strings.ReplaceAll(id, "-", "")
+	if len(cleanID) == 32 {
+		return cleanID, nil
 	}
 
 	query := `SELECT id FROM daily_logs WHERE id LIKE ?`
-	rows, err := DB.Query(query, id+"%")
+	rows, err := DB.Query(query, cleanID+"%")
 	if err != nil {
 		return "", err
 	}

@@ -171,4 +171,3 @@ func init() {
 
 	rootCmd.AddCommand(historyCmd)
 }
-

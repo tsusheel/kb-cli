@@ -385,48 +385,9 @@ Examples:
 
 		// 1. Fuzzy finder mode if no args provided
 		if len(args) == 0 {
-			var items []CLIItem
-
-			// Active Notes
-			notes, err := db.ListNotes("")
+			items, err := GetActiveCLIItems()
 			if err != nil {
 				return err
-			}
-			for _, n := range notes {
-				displayTitle := n.Note
-				if displayTitle == "" {
-					displayTitle = "<Untitled>"
-				}
-				items = append(items, CLIItem{
-					ID:        n.ID,
-					Type:      string(n.Type),
-					Display:   displayTitle,
-					Timestamp: n.UpdatedAt.Format("2006-01-02 15:04"),
-					IsLog:     false,
-				})
-			}
-
-			// Active Daily Logs
-			logs, err := db.GetDailyLogsFilter(nil, nil, true, false)
-			if err != nil {
-				return err
-			}
-			for _, l := range logs {
-				content := l.Content
-				if len(content) > 60 {
-					content = content[:57] + "..."
-				}
-				logType := "log"
-				if l.NoteID != "" {
-					logType = "log:promoted"
-				}
-				items = append(items, CLIItem{
-					ID:        l.ID,
-					Type:      logType,
-					Display:   content,
-					Timestamp: l.CreatedAt.Format("2006-01-02 15:04"),
-					IsLog:     true,
-				})
 			}
 
 			if len(items) == 0 {

@@ -46,7 +46,6 @@ func Execute() {
 		os.Args = append([]string{os.Args[0], "add"}, args...)
 	}
 
-
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

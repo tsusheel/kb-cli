@@ -242,4 +242,3 @@ func init() {
 	syncCmd.AddCommand(syncTestCmd)
 	rootCmd.AddCommand(syncCmd)
 }
-

@@ -24,6 +24,110 @@ func (item CLIItem) FormatFuzzy() string {
 	return fmt.Sprintf("[%s] [%s] (%-12s)  %s", utils.ShortID(item.ID), item.Timestamp, item.Type, item.Display)
 }
 
+// GetActiveCLIItems fetches all active notes and daily logs formatted as CLIItems.
+func GetActiveCLIItems() ([]CLIItem, error) {
+	var items []CLIItem
+
+	// 1. Active Notes
+	notes, err := db.ListNotes("")
+	if err != nil {
+		return nil, err
+	}
+	for _, n := range notes {
+		displayTitle := n.Note
+		if len(displayTitle) > 60 {
+			displayTitle = displayTitle[:57] + "..."
+		}
+		items = append(items, CLIItem{
+			ID:        n.ID,
+			Type:      string(n.Type),
+			Display:   displayTitle,
+			Timestamp: n.UpdatedAt.Format("2006-01-02 15:04"),
+			IsLog:     false,
+		})
+	}
+
+	// 2. Active Daily Logs
+	logs, err := db.GetDailyLogsFilter(nil, nil, true, false)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range logs {
+		content := l.Content
+		if len(content) > 60 {
+			content = content[:57] + "..."
+		}
+		logType := "log"
+		if l.NoteID != "" {
+			logType = "log:promoted"
+		}
+		items = append(items, CLIItem{
+			ID:        l.ID,
+			Type:      logType,
+			Display:   content,
+			Timestamp: l.CreatedAt.Format("2006-01-02 15:04"),
+			IsLog:     true,
+		})
+	}
+
+	return items, nil
+}
+
+// GetDeletedCLIItems fetches all soft-deleted notes and daily logs formatted as CLIItems.
+func GetDeletedCLIItems() ([]CLIItem, error) {
+	var items []CLIItem
+
+	// 1. Deleted Notes
+	allNotes, err := db.ListNotesExtended("", "", "", true)
+	if err != nil {
+		return nil, err
+	}
+	for _, n := range allNotes {
+		if !n.DeletedAt.IsZero() {
+			displayTitle := n.Note
+			if len(displayTitle) > 60 {
+				displayTitle = displayTitle[:57] + "..."
+			}
+			if n.DeletedNote != "" {
+				displayTitle = fmt.Sprintf("%s (%s)", displayTitle, n.DeletedNote)
+			}
+			items = append(items, CLIItem{
+				ID:        n.ID,
+				Type:      string(n.Type),
+				Display:   displayTitle,
+				Timestamp: n.DeletedAt.Format("2006-01-02 15:04"),
+				IsLog:     false,
+			})
+		}
+	}
+
+	// 2. Deleted Daily Logs
+	allLogs, err := db.GetDailyLogsFilter(nil, nil, true, true)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range allLogs {
+		if !l.DeletedAt.IsZero() {
+			content := l.Content
+			if len(content) > 60 {
+				content = content[:57] + "..."
+			}
+			if l.DeletedNote != "" {
+				content = fmt.Sprintf("%s (%s)", content, l.DeletedNote)
+			}
+			items = append(items, CLIItem{
+				ID:        l.ID,
+				Type:      "log",
+				Display:   content,
+				Timestamp: l.DeletedAt.Format("2006-01-02 15:04"),
+				IsLog:     true,
+			})
+		}
+	}
+
+	return items, nil
+}
+
 // completeNoteIDs returns active note IDs with titles as descriptions (e.g. "2d64a5a\tnew note")
 func completeNoteIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	notes, err := db.ListNotes("")
