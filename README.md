@@ -190,17 +190,24 @@ kb ls "distributed caching"
 kb ls postgres
 kb ls -t todo "migration"
 
-# Open / view note details (fuzzy-finds if ID is omitted)
+# Open / view note or daily log details (fuzzy-finds across all notes and logs if ID is omitted)
 kb open
 kb open a1b2c3d
+kb open 6fb3bab
+
+# Interactive fuzzy-select and edit menu (title, body, type, status, area, due date, tags, links):
+kb edit
+
+# Interactive edit for a specific note or daily log:
+kb edit a1b2c3d
 
 # Rename / edit note title directly:
 kb edit a1b2c3d "Updated Note Title"
 kb rename a1b2c3d "Updated Note Title"
 kb edit a1b2c3d -n "Updated Note Title" --status in-progress --type project
 
-# Open $EDITOR to write or update note flesh (body)
-kb edit a1b2c3d
+# Open $EDITOR directly to write or update note flesh (body):
+kb edit a1b2c3d -e
 kb flesh a1b2c3d
 ```
 

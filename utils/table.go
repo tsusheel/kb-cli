@@ -337,6 +337,100 @@ func RenderNoteDetail(n *models.Note, tags []models.Tag, links []models.Link, ou
 	}
 }
 
+// RenderDailyLogDetail renders a single daily log's complete metadata and content in a styled card.
+func RenderDailyLogDetail(l *models.DailyLog, promotedNote *models.Note, out io.Writer) {
+	if l == nil {
+		return
+	}
+	if out == nil {
+		out = os.Stdout
+	}
+
+	termWidth := GetTerminalWidth()
+	maxValWidth := termWidth - 24
+	if maxValWidth < 30 {
+		maxValWidth = 30
+	}
+	if maxValWidth > 100 {
+		maxValWidth = 100
+	}
+
+	table := tablewriter.NewTable(
+		out,
+		tablewriter.WithHeader([]string{"PROPERTY", "VALUE"}),
+		tablewriter.WithHeaderAutoFormat(tw.Off),
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbols(tw.StyleRounded),
+			Settings: tw.Settings{
+				Separators: tw.Separators{
+					BetweenRows:    tw.On,
+					BetweenColumns: tw.On,
+					ShowHeader:     tw.On,
+				},
+			},
+		}),
+		tablewriter.WithRowMaxWidth(maxValWidth),
+		tablewriter.WithHeaderAlignment(tw.AlignLeft),
+		tablewriter.WithRowAlignment(tw.AlignLeft),
+	)
+
+	table.Append([]string{"ID", ShortID(l.ID)})
+	table.Append([]string{"Type", "daily_log"})
+
+	status := "unpromoted"
+	if l.NoteID != "" {
+		if promotedNote != nil && promotedNote.Note != "" {
+			status = fmt.Sprintf("promoted ➔ note [%s] %q", ShortID(l.NoteID), promotedNote.Note)
+		} else {
+			status = fmt.Sprintf("promoted ➔ note [%s]", ShortID(l.NoteID))
+		}
+	}
+	if !l.DeletedAt.IsZero() {
+		status = "deleted"
+		if l.DeletedNote != "" {
+			status = fmt.Sprintf("deleted (%s)", l.DeletedNote)
+		}
+	}
+	table.Append([]string{"Status", status})
+
+	table.Append([]string{"Created", l.CreatedAt.Format("2006-01-02 15:04:05")})
+	if !l.DeletedAt.IsZero() {
+		table.Append([]string{"Deleted At", l.DeletedAt.Format("2006-01-02 15:04:05")})
+	}
+
+	table.Render()
+
+	// Content Card
+	fmt.Println()
+	contentWidth := termWidth - 10
+	if contentWidth < 40 {
+		contentWidth = 40
+	}
+	if contentWidth > 110 {
+		contentWidth = 110
+	}
+
+	contentTable := tablewriter.NewTable(
+		out,
+		tablewriter.WithHeader([]string{"LOG CONTENT"}),
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbols(tw.StyleRounded),
+			Settings: tw.Settings{
+				Separators: tw.Separators{
+					BetweenRows:    tw.On,
+					BetweenColumns: tw.On,
+					ShowHeader:     tw.On,
+				},
+			},
+		}),
+		tablewriter.WithRowMaxWidth(contentWidth),
+		tablewriter.WithHeaderAlignment(tw.AlignLeft),
+		tablewriter.WithRowAlignment(tw.AlignLeft),
+	)
+	contentTable.Append([]string{l.Content})
+	contentTable.Render()
+}
+
 // ConfigItem represents a configuration or secret key-value-source entry.
 type ConfigItem struct {
 	Key    string

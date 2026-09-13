@@ -7,6 +7,7 @@ import (
 	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
+	"github.com/tsusheel/kb-cli/utils"
 )
 
 var deleteReason string
@@ -49,9 +50,10 @@ func deleteSingleItem(id string, reason string) error {
 var deleteCmd = &cobra.Command{
 	Use:     "delete [id...]",
 	Aliases: []string{"rm", "del", "remove"},
-	Short:   "Soft-delete a note or daily log (fuzzy-select if ID is omitted)",
-	Long: `Soft-delete a note or daily log by ID.
+	Short:   "Soft-delete notes or daily logs (fuzzy-select if ID is omitted)",
+	Long: `Soft-delete notes or daily logs by ID.
 
+When run without arguments, launches an interactive multi-selection fuzzy finder containing all active notes and daily logs.
 All deletions are non-destructive and preserve an audit trail (deleted_at timestamp and attribution reason).
 
 Examples:
@@ -62,29 +64,65 @@ Examples:
   # Delete with custom reason:
   kb delete 3aba340 --reason "superseded by new spec"
 
-  # Fuzzy-find and select a note to delete:
+  # Fuzzy-find and select notes/logs to delete (Tab to multi-select, Enter to confirm):
   kb delete
+  kb rm
 
   # Delete a daily log:
   kb delete 6a178a8`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			// Fuzzy finder mode
+			var items []CLIItem
+
+			// 1. Active Notes
 			notes, err := db.ListNotes("")
 			if err != nil {
 				return err
 			}
-			if len(notes) == 0 {
-				fmt.Println("No active notes found to delete.")
-				return nil
-			}
-
-			idx, err := fuzzyfinder.Find(notes, func(i int) string {
-				displayTitle := notes[i].Note
+			for _, n := range notes {
+				displayTitle := n.Note
 				if displayTitle == "" {
 					displayTitle = "<Untitled>"
 				}
-				return fmt.Sprintf("[%s] %s (%s)", notes[i].ID[:7], displayTitle, notes[i].Type)
+				items = append(items, CLIItem{
+					ID:        n.ID,
+					Type:      string(n.Type),
+					Display:   displayTitle,
+					Timestamp: n.UpdatedAt.Format("2006-01-02 15:04"),
+					IsLog:     false,
+				})
+			}
+
+			// 2. Active Daily Logs
+			logs, err := db.GetDailyLogsFilter(nil, nil, true, false)
+			if err != nil {
+				return err
+			}
+			for _, l := range logs {
+				content := l.Content
+				if len(content) > 60 {
+					content = content[:57] + "..."
+				}
+				logType := "log"
+				if l.NoteID != "" {
+					logType = "log:promoted"
+				}
+				items = append(items, CLIItem{
+					ID:        l.ID,
+					Type:      logType,
+					Display:   content,
+					Timestamp: l.CreatedAt.Format("2006-01-02 15:04"),
+					IsLog:     true,
+				})
+			}
+
+			if len(items) == 0 {
+				fmt.Println("No active notes or daily logs found to delete.")
+				return nil
+			}
+
+			idxs, err := fuzzyfinder.FindMulti(items, func(i int) string {
+				return fmt.Sprintf("[%s] (%-12s) %s  [%s]", utils.ShortID(items[i].ID), items[i].Type, items[i].Display, items[i].Timestamp)
 			})
 			if err != nil {
 				if err == fuzzyfinder.ErrAbort {
@@ -93,7 +131,13 @@ Examples:
 				return err
 			}
 
-			return deleteSingleItem(notes[idx].ID, deleteReason)
+			for _, idx := range idxs {
+				if err := deleteSingleItem(items[idx].ID, deleteReason); err != nil {
+					return err
+				}
+			}
+
+			return nil
 		}
 
 		for _, id := range args {
@@ -108,6 +152,6 @@ Examples:
 
 func init() {
 	deleteCmd.Flags().StringVarP(&deleteReason, "reason", "r", "deleted by user", "Attribution reason for soft delete")
-	deleteCmd.ValidArgsFunction = completeNoteIDs
+	deleteCmd.ValidArgsFunction = completeDeletableIDs
 	rootCmd.AddCommand(deleteCmd)
 }

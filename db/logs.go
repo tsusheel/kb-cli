@@ -40,6 +40,28 @@ func CreateDailyLog(content string) (*models.DailyLog, error) {
 	return logEntry, nil
 }
 
+func UpdateDailyLog(l *models.DailyLog) error {
+	fullID, err := ResolveLogID(l.ID)
+	if err != nil {
+		return err
+	}
+
+	l.Content = strings.TrimSpace(l.Content)
+	if l.Content == "" {
+		return fmt.Errorf("daily log content cannot be empty")
+	}
+
+	query := `UPDATE daily_logs SET content = ? WHERE id = ?`
+	_, err = DB.Exec(query, l.Content, fullID)
+	if err != nil {
+		return err
+	}
+
+	_ = RecordAudit(nil, "daily_log", fullID, models.ActionUpdated, "content updated", l)
+	return nil
+}
+
+
 func ResolveLogID(id string) (string, error) {
 	if len(id) == 32 || len(id) == 36 {
 		return strings.ReplaceAll(id, "-", ""), nil

@@ -79,3 +79,18 @@ func GetTagsForNote(noteID string) ([]models.Tag, error) {
 
 	return tags, nil
 }
+
+func RemoveTag(noteID string, tagName string) error {
+	fullNoteID, err := ResolveID(noteID)
+	if err != nil {
+		return err
+	}
+
+	query := `
+		DELETE FROM note_tags 
+		WHERE note_id = ? AND tag_id IN (SELECT id FROM tags WHERE name = ?)
+	`
+	_, err = DB.Exec(query, fullNoteID, tagName)
+	return err
+}
+

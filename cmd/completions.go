@@ -10,6 +10,15 @@ import (
 	"github.com/tsusheel/kb-cli/utils"
 )
 
+// CLIItem represents a selectable note or daily log in fuzzy finders
+type CLIItem struct {
+	ID        string
+	Type      string
+	Display   string
+	Timestamp string
+	IsLog     bool
+}
+
 // completeNoteIDs returns active note IDs with titles as descriptions (e.g. "2d64a5a\tnew note")
 func completeNoteIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	notes, err := db.ListNotes("")
@@ -49,6 +58,90 @@ func completeUnpromotedLogIDs(cmd *cobra.Command, args []string, toComplete stri
 			completions = append(completions, fmt.Sprintf("%s\t%s", shortID, content))
 		}
 	}
+	return completions, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeDeletableIDs returns active note and daily log IDs with descriptions
+func completeDeletableIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	var completions []string
+	idSet := make(map[string]bool)
+
+	// 1. Notes
+	if notes, err := db.ListNotes(""); err == nil {
+		for _, n := range notes {
+			shortID := utils.ShortID(n.ID)
+			if strings.HasPrefix(shortID, toComplete) || toComplete == "" {
+				idSet[shortID] = true
+				title := n.Note
+				if len(title) > 35 {
+					title = title[:32] + "..."
+				}
+				completions = append(completions, fmt.Sprintf("%s\t[note:%s] %s", shortID, n.Type, title))
+			}
+		}
+	}
+
+	// 2. Daily Logs
+	if logs, err := db.GetDailyLogsFilter(nil, nil, true, false); err == nil {
+		for _, l := range logs {
+			shortID := utils.ShortID(l.ID)
+			if (strings.HasPrefix(shortID, toComplete) || toComplete == "") && !idSet[shortID] {
+				idSet[shortID] = true
+				content := l.Content
+				if len(content) > 35 {
+					content = content[:32] + "..."
+				}
+				status := "log"
+				if l.NoteID != "" {
+					status = "log:promoted"
+				}
+				completions = append(completions, fmt.Sprintf("%s\t[%s] %s", shortID, status, content))
+			}
+		}
+	}
+
+	return completions, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeDeletedIDs returns soft-deleted note and daily log IDs with descriptions
+func completeDeletedIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	var completions []string
+	idSet := make(map[string]bool)
+
+	// 1. Deleted Notes
+	if allNotes, err := db.ListNotesExtended("", "", "", true); err == nil {
+		for _, n := range allNotes {
+			if !n.DeletedAt.IsZero() {
+				shortID := utils.ShortID(n.ID)
+				if strings.HasPrefix(shortID, toComplete) || toComplete == "" {
+					idSet[shortID] = true
+					title := n.Note
+					if len(title) > 35 {
+						title = title[:32] + "..."
+					}
+					completions = append(completions, fmt.Sprintf("%s\t[deleted note] %s", shortID, title))
+				}
+			}
+		}
+	}
+
+	// 2. Deleted Daily Logs
+	if allLogs, err := db.GetDailyLogsFilter(nil, nil, true, true); err == nil {
+		for _, l := range allLogs {
+			if !l.DeletedAt.IsZero() {
+				shortID := utils.ShortID(l.ID)
+				if (strings.HasPrefix(shortID, toComplete) || toComplete == "") && !idSet[shortID] {
+					idSet[shortID] = true
+					content := l.Content
+					if len(content) > 35 {
+						content = content[:32] + "..."
+					}
+					completions = append(completions, fmt.Sprintf("%s\t[deleted log] %s", shortID, content))
+				}
+			}
+		}
+	}
+
 	return completions, cobra.ShellCompDirectiveNoFileComp
 }
 
@@ -192,4 +285,3 @@ func completeAuditIDs(cmd *cobra.Command, args []string, toComplete string) ([]s
 	}
 	return completions, cobra.ShellCompDirectiveNoFileComp
 }
-

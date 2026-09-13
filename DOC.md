@@ -59,18 +59,24 @@ kb ls -t todo postgres
 
 ---
 
-### 3. Edit & Rename Note (`kb edit` / `kb rename` / `kb flesh`)
-Update titles, metadata flags, or open `$EDITOR` to write/edit the detailed body (`note_flesh`):
+### 3. Edit & Rename Note or Daily Log (`kb edit` / `kb rename` / `kb flesh`)
+Update titles, metadata flags, or open an interactive menu / `$EDITOR` to write/edit the detailed body (`note_flesh`):
 ```bash
+# Interactive fuzzy-select and edit menu (title, body, type, status, area, due date, tags, links):
+kb edit
+
+# Interactive edit for a specific note or daily log:
+kb edit a1b2c3d
+
 # Rename / update title directly:
 kb rename a1b2c3d "Updated Note Title"
 kb edit a1b2c3d "Updated Note Title"
 
-# Update title and metadata flags:
+# Update title and metadata flags non-interactively:
 kb edit a1b2c3d -n "New Title" --status completed --type project
 
-# Open $EDITOR to edit detailed body (note flesh):
-kb edit a1b2c3d
+# Open $EDITOR directly to edit body (note flesh):
+kb edit a1b2c3d -e
 kb flesh a1b2c3d
 ```
 
@@ -86,10 +92,11 @@ kb rm a1b2c3d
 # Delete with custom attribution reason:
 kb delete a1b2c3d --reason "superseded by new spec"
 
-# Fuzzy-find and select a note to delete (if ID omitted):
+# Fuzzy-find and select notes/logs to delete (Tab to multi-select, Enter to confirm):
 kb delete
+kb rm
 
-# Delete a daily log:
+# Delete a daily log by ID:
 kb delete 6a178a8
 kb rm 6a178a8
 ```
@@ -164,11 +171,18 @@ kb list --area work          # Filter by area
 
 ---
 
-### 9. Open Note (`kb open` / `kb view`)
-View full note contents, metadata, tags, and links. Uses interactive fuzzy-finder if no ID is passed:
+### 9. Open Note or Daily Log (`kb open` / `kb view`)
+View full contents, metadata, tags, and links for notes or daily logs. Uses interactive fuzzy-finder across all active notes and daily logs if no ID is passed:
 ```bash
+# Fuzzy-find and open a note or daily log:
 kb open
+kb view
+
+# Open note by ID:
 kb open a1b2c3d
+
+# Open daily log by ID:
+kb open 6fb3bab
 ```
 
 ---
