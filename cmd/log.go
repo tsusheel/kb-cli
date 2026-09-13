@@ -50,16 +50,8 @@ var logCmd = &cobra.Command{
 	},
 }
 
-var todayCmd = &cobra.Command{
-	Use:   "today",
-	Short: "View today's chronological stream of logs",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return displayTodayLogs(time.Now(), true)
-	},
-}
-
 func init() {
 	logCmd.Flags().BoolVarP(&showAllLogs, "all", "a", false, "Show all logs including promoted ones")
 	rootCmd.AddCommand(logCmd)
-	rootCmd.AddCommand(todayCmd)
 }
+

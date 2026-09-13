@@ -3,11 +3,13 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/tsusheel/kb-cli/models"
 )
+
 
 var ErrNotFound = errors.New("note not found")
 var ErrAmbiguous = errors.New("ambiguous short id, multiple notes found")
@@ -241,15 +243,32 @@ func ListNotesExtended(filterType, filterStatus, filterArea string, includeDelet
 	return notes, nil
 }
 
-func SearchNotes(searchTerm string) ([]models.Note, error) {
-	query := `
+func SearchNotesExtended(searchTerm, filterType, filterStatus, filterArea string) ([]models.Note, error) {
+	whereClauses := []string{"notes_fts MATCH ?", "n.deleted_at IS NULL"}
+	args := []interface{}{searchTerm}
+
+	if filterType != "" {
+		whereClauses = append(whereClauses, "n.type = ?")
+		args = append(args, filterType)
+	}
+	if filterStatus != "" {
+		whereClauses = append(whereClauses, "n.status = ?")
+		args = append(args, filterStatus)
+	}
+	if filterArea != "" {
+		whereClauses = append(whereClauses, "n.area = ?")
+		args = append(args, filterArea)
+	}
+
+	query := fmt.Sprintf(`
 		SELECT n.id, n.note, n.type, n.status, n.area, n.target_date_time, n.created_at, n.updated_at 
 		FROM notes_fts fts
 		JOIN notes n ON n.id = fts.note_id
-		WHERE notes_fts MATCH ? AND n.deleted_at IS NULL
+		WHERE %s
 		ORDER BY rank
-	`
-	rows, err := DB.Query(query, searchTerm)
+	`, strings.Join(whereClauses, " AND "))
+
+	rows, err := DB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -271,6 +290,11 @@ func SearchNotes(searchTerm string) ([]models.Note, error) {
 
 	return notes, nil
 }
+
+func SearchNotes(searchTerm string) ([]models.Note, error) {
+	return SearchNotesExtended(searchTerm, "", "", "")
+}
+
 
 // GetRawNotes returns raw unrefined notes for today (todayOnly=true) or all time (todayOnly=false).
 func GetRawNotes(todayOnly bool) ([]models.Note, error) {

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
@@ -20,9 +21,9 @@ var (
 )
 
 var listCmd = &cobra.Command{
-	Use:     "list",
-	Aliases: []string{"ls"},
-	Short:   "List all items",
+	Use:     "list [query]",
+	Aliases: []string{"ls", "search", "find"},
+	Short:   "List notes or search by keyword (e.g. 'kb ls', 'kb ls postgres', 'kb ls -t todo')",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var filterType string
 		if listTypeFlag != "" {
@@ -35,14 +36,29 @@ var listCmd = &cobra.Command{
 			filterType = "todo"
 		}
 
-		notes, err := db.ListNotesExtended(filterType, listStatusFlag, listAreaFlag, false)
-		if err != nil {
-			return err
-		}
+		query := strings.TrimSpace(strings.Join(args, " "))
 
-		if len(notes) == 0 {
-			fmt.Println("No notes found.")
-			return nil
+		var notes []models.Note
+		var err error
+
+		if query != "" {
+			notes, err = db.SearchNotesExtended(query, filterType, listStatusFlag, listAreaFlag)
+			if err != nil {
+				return err
+			}
+			if len(notes) == 0 {
+				fmt.Printf("No notes found matching: '%s'\n", query)
+				return nil
+			}
+		} else {
+			notes, err = db.ListNotesExtended(filterType, listStatusFlag, listAreaFlag, false)
+			if err != nil {
+				return err
+			}
+			if len(notes) == 0 {
+				fmt.Println("No notes found.")
+				return nil
+			}
 		}
 
 		printNotesTable(notes)
@@ -53,6 +69,7 @@ var listCmd = &cobra.Command{
 func printNotesTable(notes []models.Note) {
 	utils.RenderNotesTable(notes, os.Stdout)
 }
+
 
 
 

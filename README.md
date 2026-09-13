@@ -161,30 +161,36 @@ kb sync test
 
 ## Quickstart & CLI Usage
 
-### 1. Capturing Thoughts
+### 1. Capturing Thoughts (`kb [thought]` / `kb add`)
 
 ```bash
-# Rapid 1-line positional jot (defaults to note type, raw status)
+# Rapid 1-line positional capture (no command needed)
 kb "Explore SQLite WAL mode performance"
 
-# Fast jot with flags
-kb jot "Implement Raft log compaction" --type todo --due "tomorrow" --area work
-kb jot "Graph neural networks for note recommendation" --type idea
+# Fast add with flags
+kb add "Implement Raft log compaction" --type todo --due "tomorrow" --area work
+kb add "Graph neural networks for note recommendation" --type idea
 
 # Add note with editor ($EDITOR) for detailed body/flesh
-kb add -n "API Gateway Architecture" --type project --area work --tags "backend,arch"
+kb add "API Gateway Architecture" -e --type project --area work --tags "backend,arch"
+kb add
 ```
 
-### 2. Viewing, Editing & Renaming Notes
+### 2. Viewing, Browsing & Searching Notes (`kb ls [query]`)
 
 ```bash
-# List all notes
-kb list
-kb list --todos      # Only todos
-kb list --projects   # Only projects
-kb list -t idea      # Filter by type
+# List all notes in a rounded table
+kb ls
+kb ls --todos      # Only todos
+kb ls --projects   # Only projects
+kb ls -t idea      # Filter by type
 
-# Open / view note (fuzzy-finds if ID is omitted)
+# Search keywords across note titles and bodies
+kb ls "distributed caching"
+kb ls postgres
+kb ls -t todo "migration"
+
+# Open / view note details (fuzzy-finds if ID is omitted)
 kb open
 kb open a1b2c3d
 
@@ -198,7 +204,7 @@ kb edit a1b2c3d
 kb flesh a1b2c3d
 ```
 
-### 3. Deleting Notes & Logs
+### 3. Deleting Notes & Logs (`kb delete` / `kb rm`)
 
 All deletions are safe, non-destructive soft deletes with timestamps and attribution:
 
@@ -218,22 +224,24 @@ kb delete 6a178a8
 kb rm 6a178a8
 ```
 
-### 4. Daily Logging & Stream
+### 4. Daily Logging & Stream (`kb log`)
 
 ```bash
 # Append a micro-log to today's stream
 kb log "Finished reviewing PR for MCP protocol"
 kb log "Benchmarked query latency: 1.2ms average"
 
-# View today's chronological stream
-kb today
+# View today's unpromoted logs
 kb log
+
+# View all of today's logs (including promoted ones)
+kb log -a
 
 # Promote a micro-log entry to a permanent Note
 kb promote 08db3db --type project
 ```
 
-### 5. Inbox & Triage
+### 5. Inbox & Triage (`kb inbox` / `kb triage`)
 
 ```bash
 # View today's raw unrefined notes awaiting triage
@@ -249,20 +257,14 @@ kb triage
 kb triage -a
 ```
 
-### 5. Full-Text Search
-
-```bash
-kb search "distributed caching"
-kb search "sqlite WAL"
-```
-
-### 6. Linking Notes
+### 6. Linking Notes (`kb link`)
 
 ```bash
 # Create semantic relationships between notes
 kb link <from_id> <to_id> --type related_to
 kb link <from_id> <to_id> --type depends_on
 ```
+
 
 ---
 

@@ -7,15 +7,15 @@ A fast, local-first personal knowledge base and second brain CLI with embedded S
 ## Key Features
 
 - **Two-Speed Thought Capture**:
-  - **Instant Jot**: Fast `< 50ms` capture directly from the terminal without opening an editor (`kb "thought"`, `kb jot "idea"`).
-  - **Deep Fleshing**: Dedicated editor workflow (`$EDITOR`) to write and edit detailed markdown bodies (`kb add`, `kb edit <id>`, `kb flesh <id>`).
+  - **Instant Capture**: Fast `< 50ms` capture directly from the terminal without opening an editor (`kb "thought"`, `kb add "idea"`).
+  - **Deep Fleshing**: Dedicated editor workflow (`$EDITOR`) to write and edit detailed markdown bodies (`kb add`, `kb add -e`, `kb edit <id>`).
 - **Title Editing & Renaming**: Update note titles directly without opening an editor (`kb rename <id> "new title"`, `kb edit <id> "new title"`).
-- **Temporal Stream & Daily Logs**: Micro-logging throughout the day (`kb log "entry"`, `kb today`) with one-command promotion to permanent notes (`kb promote <id>`).
+- **Temporal Stream & Daily Logs**: Micro-logging throughout the day (`kb log "entry"`, `kb log -a`) with one-command promotion to permanent notes (`kb promote <id>`).
 - **Inbox & Interactive Triage**: Accumulate raw thoughts chaotically, then rapidly triage, refine, or tag them (`kb inbox`, `kb triage`).
 - **Non-Destructive Soft Deletes**: Soft-delete notes and daily logs with audit trails and fuzzy-finder fallback (`kb delete [id]`, `kb rm [id]`).
 - **Local-First PostgreSQL Sync**: Two-way encrypted synchronization between local SQLite and remote PostgreSQL (`kb sync`, `kb sync push`, `kb sync pull`, `kb sync status`).
 - **Hardware/OS Keyring Secrets**: Sensitive passwords are never stored in plaintext `config.yaml`; encrypted in OS Credential Manager (`kb config set-secret`).
-- **Full-Text Search (FTS5)**: Instant search across note titles and content bodies with relevance ranking (`kb search "query"`, `kb find "query"`).
+- **Full-Text Search & Browsing**: Instant search and browsing with `kb ls [query]` across note titles and content bodies (`kb ls postgres`, `kb ls -t todo`).
 - **Clean Text & Relational Graph**: Prose stays pure and readable; tags and links live in the database metadata layer without markup pollution.
 - **AI Agent Connectivity (MCP Server)**: Run `kb serve` / `kb mcp` to connect `kb-cli` as an MCP server with Claude Desktop, Antigravity, Cursor, Cline, or any MCP-compliant AI assistant.
 
@@ -23,23 +23,38 @@ A fast, local-first personal knowledge base and second brain CLI with embedded S
 
 ## CLI Command Reference
 
-### 1. Instant Jot (`kb <thought>` / `kb jot`)
-Capture fleeting thoughts instantly without opening an editor:
+### 1. Add & Quick Capture (`kb [thought]` / `kb add`)
+Capture thoughts instantly or open your editor for detailed notes:
 ```bash
-# Direct positional jot
+# Direct positional capture (no command needed)
 kb "Explore SQLite WAL mode performance"
 
 # With type, status, area, and due date
-kb jot "Implement Raft log compaction" --type todo --due "tomorrow" --area work
-kb jot "Graph neural networks for note recommendation" --type idea
+kb add "Implement Raft log compaction" --type todo --due "tomorrow" --area work
+kb add "Graph neural networks for note recommendation" --type idea
+
+# Open $EDITOR to write long-form note body:
+kb add "System Architecture" -e
+kb add
 ```
 
 ---
 
-### 2. Add Note (`kb add`)
-Create a new note and open your configured editor (`$EDITOR` or default `notepad`/`vi`) to write note flesh:
+### 2. List & Search Notes (`kb ls [query]`)
+List notes or perform full-text search directly:
 ```bash
-kb add -n "Fix database migrations" --type todo --due "tomorrow" --area work
+# List all notes in a clean rounded table
+kb ls
+
+# Filter by type, status, or area
+kb ls -t todo
+kb ls -s raw
+kb ls -a work
+
+# Search keywords across note titles and bodies
+kb ls postgres
+kb ls "query optimization"
+kb ls -t todo postgres
 ```
 
 ---
@@ -81,7 +96,7 @@ kb rm 6a178a8
 
 ---
 
-### 5. Daily Stream & Micro-Logs (`kb log` / `kb today`)
+### 5. Daily Stream & Micro-Logs (`kb log`)
 Record timestamped micro-logs throughout your workday and view today's chronological stream:
 ```bash
 # Append micro-logs
@@ -93,7 +108,6 @@ kb log
 
 # View all logs including promoted ones
 kb log -a
-kb today
 ```
 
 ---

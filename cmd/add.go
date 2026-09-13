@@ -13,17 +13,18 @@ import (
 )
 
 var (
-	noteText   string
-	noteType   string
-	noteArea   string
-	noteStatus string
-	noteDue    string
-	noteTags   []string
+	noteText     string
+	noteType     string
+	noteArea     string
+	noteStatus   string
+	noteDue      string
+	noteTags     []string
+	noteEditFlag bool
 )
 
 var addCmd = &cobra.Command{
-	Use:   "add",
-	Short: "Add a new note",
+	Use:   "add [text]",
+	Short: "Add a new note (inline text or in editor with -e/--edit)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var targetDT time.Time
 		if noteDue != "" {
@@ -34,25 +35,41 @@ var addCmd = &cobra.Command{
 			}
 		}
 
-		content, err := captureEditorContent("")
-		if err != nil {
-			return fmt.Errorf("failed to open editor: %w", err)
+		title := strings.TrimSpace(strings.Join(args, " "))
+		if title == "" && noteText != "" {
+			title = strings.TrimSpace(noteText)
 		}
 
-		content = strings.TrimSpace(content)
-		if content == "" {
-			fmt.Println("Note content is empty, aborting.")
-			return nil
+		var flesh string
+		if noteEditFlag || title == "" {
+			var err error
+			flesh, err = captureEditorContent("")
+			if err != nil {
+				return fmt.Errorf("failed to open editor: %w", err)
+			}
+			flesh = strings.TrimSpace(flesh)
+			if flesh == "" && title == "" {
+				fmt.Println("Note is empty, aborting.")
+				return nil
+			}
+		}
+
+		status := models.Status(noteStatus)
+		if status == "" {
+			if flesh != "" {
+				status = models.Active
+			} else {
+				status = models.Raw
+			}
 		}
 
 		id := strings.ReplaceAll(uuid.New().String(), "-", "")
-
 		n := &models.Note{
 			ID:             id,
-			Note:           noteText,
-			NoteFlesh:      content,
+			Note:           title,
+			NoteFlesh:      flesh,
 			Type:           models.NoteType(noteType),
-			Status:         models.Status(noteStatus),
+			Status:         status,
 			Area:           models.Area(noteArea),
 			TargetDateTime: targetDT,
 		}
@@ -67,18 +84,23 @@ var addCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Printf("Successfully created note [%s]\n", utils.ShortID(id))
+		displayTitle := n.Note
+		if displayTitle == "" {
+			displayTitle = "<Untitled>"
+		}
+		fmt.Printf("✔ Created note [%s] (%s): %s\n", utils.ShortID(id), n.Type, displayTitle)
 		return nil
 	},
 }
 
 func init() {
 	addCmd.Flags().StringVarP(&noteText, "note", "n", "", "Summary or title of the note")
-	addCmd.Flags().StringVarP(&noteDue, "due", "d", "", "Due / target date (e.g., 'today', 'tomorrow', 'monday', '+3d', or formatted date)")
-	addCmd.Flags().StringVarP(&noteType, "type", "t", string(models.DefaultNote), "Type of the note")
-	addCmd.Flags().StringVarP(&noteArea, "area", "a", "", "Area of the note")
-	addCmd.Flags().StringVarP(&noteStatus, "status", "s", string(models.Active), "Status of the note")
+	addCmd.Flags().StringVarP(&noteDue, "due", "d", "", "Due / target date (e.g., 'today', 'tomorrow', 'monday', '+3d')")
+	addCmd.Flags().StringVarP(&noteType, "type", "t", string(models.DefaultNote), "Type of the note (e.g. note, todo, idea, project)")
+	addCmd.Flags().StringVarP(&noteArea, "area", "a", "", "Area of the note (e.g. work, personal, finance)")
+	addCmd.Flags().StringVarP(&noteStatus, "status", "s", "", "Status of the note (raw, active, refined, completed, archived)")
 	addCmd.Flags().StringSliceVar(&noteTags, "tags", []string{}, "Tags for the note")
+	addCmd.Flags().BoolVarP(&noteEditFlag, "edit", "e", false, "Open editor to write full note body (flesh)")
 
 	addCmd.RegisterFlagCompletionFunc("type", completeNoteTypes)
 	addCmd.RegisterFlagCompletionFunc("status", completeNoteStatuses)
@@ -86,3 +108,4 @@ func init() {
 
 	rootCmd.AddCommand(addCmd)
 }
+

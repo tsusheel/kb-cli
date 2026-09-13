@@ -40,9 +40,10 @@ func isKnownCommand(arg string) bool {
 func Execute() {
 	args := os.Args[1:]
 	if len(args) > 0 && !isKnownCommand(args[0]) {
-		// First argument is not a known command or flag; route to 'jot'
-		os.Args = append([]string{os.Args[0], "jot"}, args...)
+		// First argument is not a known command or flag; route to 'add'
+		os.Args = append([]string{os.Args[0], "add"}, args...)
 	}
+
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
