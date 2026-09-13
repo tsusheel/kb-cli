@@ -72,5 +72,3 @@ func TestKeyringMock(t *testing.T) {
 		t.Errorf("expected HasSecret(%q) to be false after deletion", key)
 	}
 }
-
-

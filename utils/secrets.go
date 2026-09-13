@@ -7,27 +7,11 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/spf13/viper"
 	"github.com/zalando/go-keyring"
 	"golang.org/x/term"
 )
 
 const ServiceName = "kb-cli"
-
-// GetPostgresURL resolves the PostgreSQL connection URL from viper config or environment variables.
-func GetPostgresURL() string {
-	rawURL := viper.GetString("remote.postgres_url")
-	if rawURL == "" {
-		rawURL = viper.GetString("postgres_url")
-	}
-	if rawURL == "" {
-		rawURL = os.Getenv("KB_POSTGRES_URL")
-	}
-	if rawURL == "" {
-		rawURL = os.Getenv("DATABASE_URL")
-	}
-	return rawURL
-}
 
 // MaskURL hides sensitive passwords in database connection strings for safe display.
 func MaskURL(rawURL string) string {

@@ -34,7 +34,14 @@ var configSetCmd = &cobra.Command{
 			fmt.Printf("   To keep your credentials secure, use: kb config set-secret %s\n\n", key)
 		}
 
-		viper.Set(key, val)
+		if strings.EqualFold(val, "true") {
+			viper.Set(key, true)
+		} else if strings.EqualFold(val, "false") {
+			viper.Set(key, false)
+		} else {
+			viper.Set(key, val)
+		}
+
 		configFile := viper.ConfigFileUsed()
 		if configFile == "" {
 			home, _ := os.UserHomeDir()

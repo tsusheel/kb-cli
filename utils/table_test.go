@@ -155,3 +155,33 @@ func TestRenderConfigTableEmpty(t *testing.T) {
 		t.Errorf("expected 'No configuration found.', got %q", output)
 	}
 }
+
+func TestRenderSyncStatusTable(t *testing.T) {
+	info := SyncStatusInfo{
+		Enabled:       false,
+		Provider:      "PostgreSQL",
+		DatabaseURL:   "postgresql://postgres@localhost:5432/kb",
+		HasPassword:   true,
+		LastSyncedAt:  time.Date(2026, 9, 13, 14, 0, 0, 0, time.UTC),
+		UnsyncedNotes: 2,
+		UnsyncedLogs:  1,
+	}
+
+	var buf bytes.Buffer
+	RenderSyncStatusTable(info, &buf)
+
+	output := buf.String()
+	if !strings.Contains(output, "PROPERTY") || !strings.Contains(output, "VALUE") {
+		t.Errorf("expected sync status table headers, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Sync Status") || !strings.Contains(output, "DISABLED (remote.enabled = false)") {
+		t.Errorf("expected disabled sync status in table, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Database URL") || !strings.Contains(output, "postgresql://postgres@localhost:5432/kb") {
+		t.Errorf("expected database url in table, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Pending Changes") || !strings.Contains(output, "2 un-synced notes, 1 un-synced logs") {
+		t.Errorf("expected pending changes count in table, got:\n%s", output)
+	}
+}
+

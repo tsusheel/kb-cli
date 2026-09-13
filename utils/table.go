@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
@@ -368,6 +369,85 @@ func RenderConfigTable(items []ConfigItem, out io.Writer) {
 			item.Source,
 		})
 	}
+
+	table.Render()
+}
+
+// SyncStatusInfo holds synchronization status metrics and connection properties.
+type SyncStatusInfo struct {
+	Enabled       bool
+	Provider      string
+	DatabaseURL   string
+	HasPassword   bool
+	LastSyncedAt  time.Time
+	UnsyncedNotes int
+	UnsyncedLogs  int
+}
+
+// RenderSyncStatusTable renders synchronization status information in a clean rounded table.
+func RenderSyncStatusTable(info SyncStatusInfo, out io.Writer) {
+	if out == nil {
+		out = os.Stdout
+	}
+
+	termWidth := GetTerminalWidth()
+	maxValWidth := termWidth - 28
+	if maxValWidth < 30 {
+		maxValWidth = 30
+	}
+	if maxValWidth > 100 {
+		maxValWidth = 100
+	}
+
+	table := tablewriter.NewTable(
+		out,
+		tablewriter.WithHeader([]string{"PROPERTY", "VALUE"}),
+		tablewriter.WithHeaderAutoFormat(tw.Off),
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbols(tw.StyleRounded),
+			Settings: tw.Settings{
+				Separators: tw.Separators{
+					BetweenRows:    tw.On,
+					BetweenColumns: tw.On,
+					ShowHeader:     tw.On,
+				},
+			},
+		}),
+		tablewriter.WithRowMaxWidth(maxValWidth),
+		tablewriter.WithHeaderAlignment(tw.AlignLeft),
+		tablewriter.WithRowAlignment(tw.AlignLeft),
+	)
+
+	statusStr := "ENABLED"
+	if !info.Enabled {
+		statusStr = "DISABLED (remote.enabled = false)"
+	}
+	table.Append([]string{"Sync Status", statusStr})
+
+	if info.Provider != "" {
+		table.Append([]string{"Provider", info.Provider})
+	}
+
+	urlStr := info.DatabaseURL
+	if urlStr == "" {
+		urlStr = "[Not Configured]"
+	}
+	table.Append([]string{"Database URL", urlStr})
+
+	passStr := "[Configured in OS Keyring]"
+	if !info.HasPassword {
+		passStr = "[Not Configured]"
+	}
+	table.Append([]string{"Password", passStr})
+
+	lastSyncStr := "Never"
+	if !info.LastSyncedAt.IsZero() {
+		lastSyncStr = info.LastSyncedAt.Format("2006-01-02 15:04:05")
+	}
+	table.Append([]string{"Last Synced", lastSyncStr})
+
+	pendingStr := fmt.Sprintf("%d un-synced notes, %d un-synced logs", info.UnsyncedNotes, info.UnsyncedLogs)
+	table.Append([]string{"Pending Changes", pendingStr})
 
 	table.Render()
 }

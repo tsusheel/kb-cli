@@ -9,9 +9,11 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "kb [thought]",
-	Short: "Knowledge base CLI",
-	Long:  "A fast CLI tool to manage your personal knowledge base and second brain.",
+	Use:           "kb [thought]",
+	Short:         "Knowledge base CLI",
+	Long:          "A fast CLI tool to manage your personal knowledge base and second brain.",
+	SilenceUsage:  true,
+	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},
