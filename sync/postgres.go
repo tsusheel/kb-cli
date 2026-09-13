@@ -19,23 +19,25 @@ type PostgresClient struct {
 }
 
 type SyncStats struct {
-	NotesPushed int           `json:"notes_pushed"`
-	NotesPulled int           `json:"notes_pulled"`
-	TagsPushed  int           `json:"tags_pushed"`
-	TagsPulled  int           `json:"tags_pulled"`
-	LinksPushed int           `json:"links_pushed"`
-	LinksPulled int           `json:"links_pulled"`
-	LogsPushed  int           `json:"logs_pushed"`
-	LogsPulled  int           `json:"logs_pulled"`
-	Duration    time.Duration `json:"duration"`
+	NotesPushed     int           `json:"notes_pushed"`
+	NotesPulled     int           `json:"notes_pulled"`
+	TagsPushed      int           `json:"tags_pushed"`
+	TagsPulled      int           `json:"tags_pulled"`
+	LinksPushed     int           `json:"links_pushed"`
+	LinksPulled     int           `json:"links_pulled"`
+	LogsPushed      int           `json:"logs_pushed"`
+	LogsPulled      int           `json:"logs_pulled"`
+	AuditLogsPushed int           `json:"audit_logs_pushed"`
+	AuditLogsPulled int           `json:"audit_logs_pulled"`
+	Duration        time.Duration `json:"duration"`
 }
 
 func (s *SyncStats) TotalPushed() int {
-	return s.NotesPushed + s.TagsPushed + s.LinksPushed + s.LogsPushed
+	return s.NotesPushed + s.TagsPushed + s.LinksPushed + s.LogsPushed + s.AuditLogsPushed
 }
 
 func (s *SyncStats) TotalPulled() int {
-	return s.NotesPulled + s.TagsPulled + s.LinksPulled + s.LogsPulled
+	return s.NotesPulled + s.TagsPulled + s.LinksPulled + s.LogsPulled + s.AuditLogsPulled
 }
 
 const pgInitSchemaSQL = `
@@ -88,12 +90,24 @@ CREATE TABLE IF NOT EXISTS daily_logs (
   deleted_note TEXT
 );
 
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id VARCHAR(64) PRIMARY KEY,
+  entity_type VARCHAR(64) NOT NULL,
+  entity_id VARCHAR(64) NOT NULL,
+  action VARCHAR(64) NOT NULL,
+  changes_summary TEXT,
+  snapshot_json TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_pg_notes_deleted_at ON notes(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_pg_notes_updated_at ON notes(updated_at);
 CREATE INDEX IF NOT EXISTS idx_pg_notes_type ON notes(type);
 CREATE INDEX IF NOT EXISTS idx_pg_notes_status ON notes(status);
 CREATE INDEX IF NOT EXISTS idx_pg_daily_logs_created_at ON daily_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_pg_links_from_to ON links(from_note, to_note);
+CREATE INDEX IF NOT EXISTS idx_pg_audit_entity ON audit_logs(entity_type, entity_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pg_audit_created_at ON audit_logs(created_at DESC);
 `
 
 // NewPostgresClient creates and connects to a remote PostgreSQL database.
@@ -290,10 +304,28 @@ func (c *PostgresClient) PushLocalChanges(since time.Time) (*SyncStats, error) {
 		stats.LogsPushed++
 	}
 
+	// 6. Push Audit Logs
+	localAudits, err := db.GetAllAuditLogsSince(since)
+	if err != nil {
+		return stats, fmt.Errorf("failed reading local audit logs: %w", err)
+	}
+	for _, a := range localAudits {
+		query := `
+			INSERT INTO audit_logs (id, entity_type, entity_id, action, changes_summary, snapshot_json, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (id) DO NOTHING
+		`
+		_, err := c.DB.Exec(query, a.ID, a.EntityType, a.EntityID, string(a.Action), a.ChangesSummary, a.SnapshotJSON, a.CreatedAt)
+		if err != nil {
+			return stats, fmt.Errorf("failed pushing audit log [%s]: %w", a.ID[:7], err)
+		}
+		stats.AuditLogsPushed++
+	}
+
 	return stats, nil
 }
 
-// PullRemoteChanges fetches modified notes, tags, links, and logs from PostgreSQL and applies them locally.
+// PullRemoteChanges fetches modified notes, tags, links, logs, and audit logs from PostgreSQL and applies them locally.
 func (c *PostgresClient) PullRemoteChanges(since time.Time) (*SyncStats, error) {
 	stats := &SyncStats{}
 
@@ -480,6 +512,44 @@ func (c *PostgresClient) PullRemoteChanges(since time.Time) (*SyncStats, error) 
 	}
 	logRows.Close()
 
+	// 6. Pull Audit Logs
+	var auditQuery string
+	var auditArgs []interface{}
+	if since.IsZero() {
+		auditQuery = `SELECT id, entity_type, entity_id, action, changes_summary, snapshot_json, created_at FROM audit_logs`
+	} else {
+		auditQuery = `SELECT id, entity_type, entity_id, action, changes_summary, snapshot_json, created_at FROM audit_logs WHERE created_at > $1`
+		auditArgs = append(auditArgs, since)
+	}
+
+	aRows, err := c.DB.Query(auditQuery, auditArgs...)
+	if err != nil {
+		return stats, fmt.Errorf("failed querying remote audit logs: %w", err)
+	}
+	defer aRows.Close()
+
+	for aRows.Next() {
+		var a models.AuditEntry
+		var summary sql.NullString
+		var snapshot sql.NullString
+		var action string
+		if err := aRows.Scan(&a.ID, &a.EntityType, &a.EntityID, &action, &summary, &snapshot, &a.CreatedAt); err != nil {
+			return stats, err
+		}
+		a.Action = models.AuditAction(action)
+		if summary.Valid {
+			a.ChangesSummary = summary.String
+		}
+		if snapshot.Valid {
+			a.SnapshotJSON = snapshot.String
+		}
+		if err := db.UpsertRemoteAuditLog(&a); err != nil {
+			return stats, fmt.Errorf("failed storing pulled audit log: %w", err)
+		}
+		stats.AuditLogsPulled++
+	}
+	aRows.Close()
+
 	return stats, nil
 }
 
@@ -517,16 +587,19 @@ func (c *PostgresClient) TwoWaySync() (*SyncStats, error) {
 	}
 
 	combined := &SyncStats{
-		NotesPushed: pushStats.NotesPushed,
-		NotesPulled: pullStats.NotesPulled,
-		TagsPushed:  pushStats.TagsPushed,
-		TagsPulled:  pullStats.TagsPulled,
-		LinksPushed: pushStats.LinksPushed,
-		LinksPulled: pullStats.LinksPulled,
-		LogsPushed:  pushStats.LogsPushed,
-		LogsPulled:  pullStats.LogsPulled,
-		Duration:    time.Since(start),
+		NotesPushed:     pushStats.NotesPushed,
+		NotesPulled:     pullStats.NotesPulled,
+		TagsPushed:      pushStats.TagsPushed,
+		TagsPulled:      pullStats.TagsPulled,
+		LinksPushed:     pushStats.LinksPushed,
+		LinksPulled:     pullStats.LinksPulled,
+		LogsPushed:      pushStats.LogsPushed,
+		LogsPulled:      pullStats.LogsPulled,
+		AuditLogsPushed: pushStats.AuditLogsPushed,
+		AuditLogsPulled: pullStats.AuditLogsPulled,
+		Duration:        time.Since(start),
 	}
 
 	return combined, nil
 }
+

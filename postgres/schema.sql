@@ -56,10 +56,23 @@ CREATE TABLE IF NOT EXISTS daily_logs (
   deleted_note TEXT
 );
 
--- 6. Indexes for Performance
+-- 6. Audit Logs Table (Change tracking & revision history)
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id VARCHAR(64) PRIMARY KEY,
+  entity_type VARCHAR(64) NOT NULL,
+  entity_id VARCHAR(64) NOT NULL,
+  action VARCHAR(64) NOT NULL,
+  changes_summary TEXT,
+  snapshot_json TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7. Indexes for Performance
 CREATE INDEX IF NOT EXISTS idx_pg_notes_deleted_at ON notes(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_pg_notes_updated_at ON notes(updated_at);
 CREATE INDEX IF NOT EXISTS idx_pg_notes_type ON notes(type);
 CREATE INDEX IF NOT EXISTS idx_pg_notes_status ON notes(status);
 CREATE INDEX IF NOT EXISTS idx_pg_daily_logs_created_at ON daily_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_pg_links_from_to ON links(from_note, to_note);
+CREATE INDEX IF NOT EXISTS idx_pg_audit_entity ON audit_logs(entity_type, entity_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pg_audit_created_at ON audit_logs(created_at DESC);

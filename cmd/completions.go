@@ -128,3 +128,39 @@ func completeSecretKeys(cmd *cobra.Command, args []string, toComplete string) ([
 	}
 	return secrets, cobra.ShellCompDirectiveNoFileComp
 }
+
+// completeAuditIDs returns audit revision IDs for a specific note or log if first arg is given
+func completeAuditIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) == 0 {
+		return completeNoteIDs(cmd, args, toComplete)
+	}
+
+	id := args[0]
+	var entityID string
+	var entityType string
+	if n, err := db.GetNote(id); err == nil {
+		entityID = n.ID
+		entityType = "note"
+	} else if l, err := db.GetDailyLog(id); err == nil {
+		entityID = l.ID
+		entityType = "daily_log"
+	} else {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	entries, err := db.GetAuditHistory(entityType, entityID, 30)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	var completions []string
+	for _, e := range entries {
+		shortRev := utils.ShortID(e.ID)
+		if strings.HasPrefix(shortRev, toComplete) || toComplete == "" {
+			desc := fmt.Sprintf("[%s] %s (%s)", e.Action, e.ChangesSummary, e.CreatedAt.Format("15:04"))
+			completions = append(completions, fmt.Sprintf("%s\t%s", shortRev, desc))
+		}
+	}
+	return completions, cobra.ShellCompDirectiveNoFileComp
+}
+

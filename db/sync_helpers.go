@@ -311,3 +311,56 @@ func UpsertRemoteDailyLog(l *models.DailyLog) error {
 	_, err := DB.Exec(query, l.ID, l.Content, l.NoteID, l.CreatedAt, deletedDT, l.DeletedNote)
 	return err
 }
+
+// GetAllAuditLogsSince retrieves audit logs created after the given time (or all if since is zero).
+func GetAllAuditLogsSince(since time.Time) ([]models.AuditEntry, error) {
+	var query string
+	var args []interface{}
+
+	if since.IsZero() {
+		query = `SELECT id, entity_type, entity_id, action, changes_summary, snapshot_json, created_at FROM audit_logs`
+	} else {
+		query = `SELECT id, entity_type, entity_id, action, changes_summary, snapshot_json, created_at FROM audit_logs WHERE created_at > ?`
+		args = []interface{}{since}
+	}
+
+	rows, err := DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []models.AuditEntry
+	for rows.Next() {
+		var entry models.AuditEntry
+		var summary sql.NullString
+		var snapshot sql.NullString
+		var action string
+
+		if err := rows.Scan(&entry.ID, &entry.EntityType, &entry.EntityID, &action, &summary, &snapshot, &entry.CreatedAt); err != nil {
+			return nil, err
+		}
+		entry.Action = models.AuditAction(action)
+		if summary.Valid {
+			entry.ChangesSummary = summary.String
+		}
+		if snapshot.Valid {
+			entry.SnapshotJSON = snapshot.String
+		}
+		entries = append(entries, entry)
+	}
+
+	return entries, nil
+}
+
+// UpsertRemoteAuditLog inserts an audit log entry pulled from remote if not already present.
+func UpsertRemoteAuditLog(entry *models.AuditEntry) error {
+	query := `
+		INSERT INTO audit_logs (id, entity_type, entity_id, action, changes_summary, snapshot_json, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO NOTHING
+	`
+	_, err := DB.Exec(query, entry.ID, entry.EntityType, entry.EntityID, string(entry.Action), entry.ChangesSummary, entry.SnapshotJSON, entry.CreatedAt)
+	return err
+}
+

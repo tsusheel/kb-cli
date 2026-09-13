@@ -219,13 +219,33 @@ kb config get remote.postgres_url
 
 ---
 
-### 14. Start MCP Server (`kb serve` / `kb mcp`)
+### 14. Audit & Version History (`kb history` / `kb audit`)
+Inspect modification timelines, view point-in-time diffs, and revert notes to earlier revisions:
+```bash
+# View recent global audit stream across all notes and logs
+kb history
+kb audit
+
+# View complete version timeline for a specific note or log
+kb history a1b2c3d
+
+# Inspect snapshot diff for a specific revision
+kb history diff a1b2c3d 9f8e7d6
+
+# Revert note to a previous revision
+kb history revert a1b2c3d 9f8e7d6
+```
+
+---
+
+### 15. Start MCP Server (`kb serve` / `kb mcp`)
 Starts the Model Context Protocol (MCP) server over standard I/O (`stdio`):
 ```bash
 kb serve
 # or
 kb mcp
 ```
+
 
 ---
 

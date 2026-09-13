@@ -185,3 +185,35 @@ func TestRenderSyncStatusTable(t *testing.T) {
 	}
 }
 
+func TestRenderAuditTable(t *testing.T) {
+	entries := []models.AuditEntry{
+		{
+			ID:             "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+			EntityType:     "note",
+			EntityID:       "1234567890abcdef1234567890abcdef",
+			Action:         models.ActionUpdated,
+			ChangesSummary: "status: raw -> active, title updated",
+			CreatedAt:      time.Date(2026, 9, 13, 15, 30, 0, 0, time.UTC),
+		},
+		{
+			ID:             "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
+			EntityType:     "note",
+			EntityID:       "1234567890abcdef1234567890abcdef",
+			Action:         models.ActionCreated,
+			ChangesSummary: "created note",
+			CreatedAt:      time.Date(2026, 9, 13, 10, 0, 0, 0, time.UTC),
+		},
+	}
+
+	var buf bytes.Buffer
+	RenderAuditTable(entries, "=== Audit History ===", &buf)
+
+	output := buf.String()
+	if !strings.Contains(output, "REV") || !strings.Contains(output, "TIME") || !strings.Contains(output, "ACTION") || !strings.Contains(output, "CHANGES") {
+		t.Errorf("expected audit table headers, got:\n%s", output)
+	}
+	if !strings.Contains(output, "a1b2c3d") || !strings.Contains(output, "status: raw -> active") {
+		t.Errorf("expected audit row content, got:\n%s", output)
+	}
+}
+

@@ -29,11 +29,15 @@ func CreateDailyLog(content string) (*models.DailyLog, error) {
 		return nil, err
 	}
 
-	return &models.DailyLog{
+	logEntry := &models.DailyLog{
 		ID:        id,
 		Content:   content,
 		CreatedAt: now,
-	}, nil
+	}
+
+	_ = RecordAudit(nil, "daily_log", id, models.ActionCreated, "created daily log", logEntry)
+
+	return logEntry, nil
 }
 
 func ResolveLogID(id string) (string, error) {
@@ -222,6 +226,9 @@ func PromoteDailyLog(logID string, noteType models.NoteType, noteStatus models.S
 		return nil, fmt.Errorf("failed to link log to note: %w", err)
 	}
 
+	l.NoteID = n.ID
+	_ = RecordAudit(nil, "daily_log", l.ID, models.ActionPromoted, fmt.Sprintf("promoted to note [%s]", n.ID[:7]), l)
+
 	return n, nil
 }
 
@@ -235,8 +242,43 @@ func SoftDeleteDailyLog(id string, reason string) error {
 		reason = "deleted"
 	}
 
+	l, _ := GetDailyLog(fullID)
+
 	now := time.Now()
 	query := `UPDATE daily_logs SET deleted_at = ?, deleted_note = ? WHERE id = ?`
 	_, err = DB.Exec(query, now, reason, fullID)
-	return err
+	if err != nil {
+		return err
+	}
+
+	if l != nil {
+		l.DeletedAt = now
+		l.DeletedNote = reason
+		_ = RecordAudit(nil, "daily_log", fullID, models.ActionDeleted, fmt.Sprintf("soft-deleted: %s", reason), l)
+	}
+
+	return nil
+}
+
+func RestoreDailyLog(id string) (*models.DailyLog, error) {
+	fullID, err := ResolveLogID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	l, err := GetDailyLog(fullID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := `UPDATE daily_logs SET deleted_at = NULL, deleted_note = NULL WHERE id = ?`
+	if _, err := DB.Exec(query, fullID); err != nil {
+		return nil, err
+	}
+
+	l.DeletedAt = time.Time{}
+	l.DeletedNote = ""
+	_ = RecordAudit(nil, "daily_log", fullID, models.ActionRestored, "restored daily log", l)
+
+	return l, nil
 }

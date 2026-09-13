@@ -33,12 +33,12 @@ func GetTerminalWidth() int {
 
 // RenderNotesTable renders a list of notes in a beautiful, structured table with rounded borders.
 func RenderNotesTable(notes []models.Note, out io.Writer) {
+	if out == nil {
+		out = os.Stdout
+	}
 	if len(notes) == 0 {
 		fmt.Fprintln(out, "No notes found.")
 		return
-	}
-	if out == nil {
-		out = os.Stdout
 	}
 
 	termWidth := GetTerminalWidth()
@@ -88,12 +88,12 @@ func RenderNotesTable(notes []models.Note, out io.Writer) {
 
 // RenderInboxTable renders a list of raw inbox notes with rounded borders.
 func RenderInboxTable(notes []models.Note, out io.Writer) {
+	if out == nil {
+		out = os.Stdout
+	}
 	if len(notes) == 0 {
 		fmt.Fprintln(out, "No notes found.")
 		return
-	}
-	if out == nil {
-		out = os.Stdout
 	}
 
 	termWidth := GetTerminalWidth()
@@ -142,13 +142,12 @@ func RenderInboxTable(notes []models.Note, out io.Writer) {
 
 // RenderDailyLogsTable renders daily logs in a beautiful rounded table.
 func RenderDailyLogsTable(logs []models.DailyLog, out io.Writer) {
-
+	if out == nil {
+		out = os.Stdout
+	}
 	if len(logs) == 0 {
 		fmt.Fprintln(out, "No logs recorded.")
 		return
-	}
-	if out == nil {
-		out = os.Stdout
 	}
 
 	termWidth := GetTerminalWidth()
@@ -326,12 +325,12 @@ type ConfigItem struct {
 
 // RenderConfigTable renders configuration settings and secret statuses in a beautiful rounded table.
 func RenderConfigTable(items []ConfigItem, out io.Writer) {
+	if out == nil {
+		out = os.Stdout
+	}
 	if len(items) == 0 {
 		fmt.Fprintln(out, "No configuration found.")
 		return
-	}
-	if out == nil {
-		out = os.Stdout
 	}
 
 	termWidth := GetTerminalWidth()
@@ -451,3 +450,141 @@ func RenderSyncStatusTable(info SyncStatusInfo, out io.Writer) {
 
 	table.Render()
 }
+
+// RenderAuditTable renders a list of audit revision entries in a rounded table.
+func RenderAuditTable(entries []models.AuditEntry, title string, out io.Writer) {
+	if out == nil {
+		out = os.Stdout
+	}
+	if len(entries) == 0 {
+		fmt.Fprintln(out, "No audit history found.")
+		return
+	}
+
+	if title != "" {
+		fmt.Fprintln(out, title)
+	}
+
+	termWidth := GetTerminalWidth()
+	maxDiffWidth := termWidth - 55
+	if maxDiffWidth < 30 {
+		maxDiffWidth = 30
+	}
+	if maxDiffWidth > 80 {
+		maxDiffWidth = 80
+	}
+
+	table := tablewriter.NewTable(
+		out,
+		tablewriter.WithHeader([]string{"REV", "TIME", "ENTITY", "ACTION", "CHANGES"}),
+		tablewriter.WithHeaderAutoFormat(tw.Off),
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbols(tw.StyleRounded),
+			Settings: tw.Settings{
+				Separators: tw.Separators{
+					BetweenRows:    tw.On,
+					BetweenColumns: tw.On,
+					ShowHeader:     tw.On,
+				},
+			},
+		}),
+		tablewriter.WithRowMaxWidth(maxDiffWidth),
+		tablewriter.WithHeaderAlignment(tw.AlignLeft),
+		tablewriter.WithRowAlignment(tw.AlignLeft),
+	)
+
+	for _, e := range entries {
+		entityDisplay := fmt.Sprintf("%s [%s]", e.EntityType, ShortID(e.EntityID))
+		summary := e.ChangesSummary
+		if summary == "" {
+			summary = "-"
+		}
+		table.Append([]string{
+			ShortID(e.ID),
+			e.CreatedAt.Format("2006-01-02 15:04"),
+			entityDisplay,
+			string(e.Action),
+			summary,
+		})
+	}
+
+	table.Render()
+}
+
+// RenderAuditDiffCard renders complete snapshot inspection for an audit revision.
+func RenderAuditDiffCard(entry *models.AuditEntry, out io.Writer) {
+	if entry == nil {
+		return
+	}
+	if out == nil {
+		out = os.Stdout
+	}
+
+	termWidth := GetTerminalWidth()
+	maxValWidth := termWidth - 28
+	if maxValWidth < 30 {
+		maxValWidth = 30
+	}
+	if maxValWidth > 100 {
+		maxValWidth = 100
+	}
+
+	table := tablewriter.NewTable(
+		out,
+		tablewriter.WithHeader([]string{"PROPERTY", "VALUE"}),
+		tablewriter.WithHeaderAutoFormat(tw.Off),
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbols(tw.StyleRounded),
+			Settings: tw.Settings{
+				Separators: tw.Separators{
+					BetweenRows:    tw.On,
+					BetweenColumns: tw.On,
+					ShowHeader:     tw.On,
+				},
+			},
+		}),
+		tablewriter.WithRowMaxWidth(maxValWidth),
+		tablewriter.WithHeaderAlignment(tw.AlignLeft),
+		tablewriter.WithRowAlignment(tw.AlignLeft),
+	)
+
+	table.Append([]string{"Revision ID", ShortID(entry.ID)})
+	table.Append([]string{"Entity", fmt.Sprintf("%s [%s]", entry.EntityType, ShortID(entry.EntityID))})
+	table.Append([]string{"Action", string(entry.Action)})
+	table.Append([]string{"Timestamp", entry.CreatedAt.Format("2006-01-02 15:04:05")})
+	table.Append([]string{"Summary", entry.ChangesSummary})
+
+	table.Render()
+
+	if strings.TrimSpace(entry.SnapshotJSON) != "" {
+		fmt.Println()
+		contentWidth := termWidth - 10
+		if contentWidth < 40 {
+			contentWidth = 40
+		}
+		if contentWidth > 110 {
+			contentWidth = 110
+		}
+
+		snapTable := tablewriter.NewTable(
+			out,
+			tablewriter.WithHeader([]string{"POINT-IN-TIME SNAPSHOT"}),
+			tablewriter.WithRendition(tw.Rendition{
+				Symbols: tw.NewSymbols(tw.StyleRounded),
+				Settings: tw.Settings{
+					Separators: tw.Separators{
+						BetweenRows:    tw.On,
+						BetweenColumns: tw.On,
+						ShowHeader:     tw.On,
+					},
+				},
+			}),
+			tablewriter.WithRowMaxWidth(contentWidth),
+			tablewriter.WithHeaderAlignment(tw.AlignLeft),
+			tablewriter.WithRowAlignment(tw.AlignLeft),
+		)
+		snapTable.Append([]string{entry.SnapshotJSON})
+		snapTable.Render()
+	}
+}
+

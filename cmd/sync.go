@@ -78,6 +78,7 @@ func printSyncSummary(title string, stats *sync.SyncStats) {
 	table.Append([]string{"Tags", fmt.Sprintf("%d", stats.TagsPushed), fmt.Sprintf("%d", stats.TagsPulled)})
 	table.Append([]string{"Links", fmt.Sprintf("%d", stats.LinksPushed), fmt.Sprintf("%d", stats.LinksPulled)})
 	table.Append([]string{"Daily Logs", fmt.Sprintf("%d", stats.LogsPushed), fmt.Sprintf("%d", stats.LogsPulled)})
+	table.Append([]string{"Audit History", fmt.Sprintf("%d", stats.AuditLogsPushed), fmt.Sprintf("%d", stats.AuditLogsPulled)})
 	table.Render()
 }
 

@@ -257,13 +257,31 @@ kb triage
 kb triage -a
 ```
 
-### 6. Linking Notes (`kb link`)
+### 6. Audit & Version History (`kb history` / `kb audit`)
+
+```bash
+# View recent global activity stream
+kb history
+kb audit
+
+# View version timeline for a note or log
+kb history a1b2c3d
+
+# Inspect snapshot diff for a specific revision
+kb history diff a1b2c3d 9f8e7d6
+
+# Revert a note to a previous revision
+kb history revert a1b2c3d 9f8e7d6
+```
+
+### 7. Linking Notes (`kb link`)
 
 ```bash
 # Create semantic relationships between notes
 kb link <from_id> <to_id> --type related_to
 kb link <from_id> <to_id> --type depends_on
 ```
+
 
 
 ---

@@ -48,6 +48,11 @@ func CreateNote(n *models.Note) error {
 		return err
 	}
 
+	// Record audit log
+	if err := RecordAudit(tx, "note", n.ID, models.ActionCreated, "created note", n); err != nil {
+		return err
+	}
+
 	return tx.Commit()
 }
 
@@ -122,6 +127,14 @@ func UpdateNote(n *models.Note) error {
 	}
 	n.ID = fullID
 
+	oldNote, err := GetNote(n.ID)
+	var diffSummary string
+	if err == nil {
+		diffSummary = ComputeNoteDiffSummary(oldNote, n)
+	} else {
+		diffSummary = "updated note"
+	}
+
 	tx, err := DB.Begin()
 	if err != nil {
 		return err
@@ -163,6 +176,11 @@ func UpdateNote(n *models.Note) error {
 		return err
 	}
 
+	// Record audit log
+	if err := RecordAudit(tx, "note", n.ID, models.ActionUpdated, diffSummary, n); err != nil {
+		return err
+	}
+
 	return tx.Commit()
 }
 
@@ -176,10 +194,48 @@ func SoftDeleteNote(id string, reason string) error {
 		reason = "deleted"
 	}
 
+	n, _ := GetNote(fullID)
+
 	now := time.Now()
 	query := `UPDATE notes SET deleted_at = ?, deleted_note = ?, updated_at = ? WHERE id = ?`
 	_, err = DB.Exec(query, now, reason, now, fullID)
-	return err
+	if err != nil {
+		return err
+	}
+
+	if n != nil {
+		n.DeletedAt = now
+		n.DeletedNote = reason
+		n.UpdatedAt = now
+		_ = RecordAudit(nil, "note", fullID, models.ActionDeleted, fmt.Sprintf("soft-deleted: %s", reason), n)
+	}
+
+	return nil
+}
+
+func RestoreNote(id string) (*models.Note, error) {
+	fullID, err := ResolveID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	n, err := GetNote(fullID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	query := `UPDATE notes SET deleted_at = NULL, deleted_note = NULL, updated_at = ? WHERE id = ?`
+	if _, err := DB.Exec(query, now, fullID); err != nil {
+		return nil, err
+	}
+
+	n.DeletedAt = time.Time{}
+	n.DeletedNote = ""
+	n.UpdatedAt = now
+	_ = RecordAudit(nil, "note", fullID, models.ActionRestored, "restored note", n)
+
+	return n, nil
 }
 
 func ListNotes(filterType string) ([]models.Note, error) {

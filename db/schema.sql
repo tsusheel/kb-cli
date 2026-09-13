@@ -53,6 +53,16 @@ CREATE TABLE IF NOT EXISTS sync_state (
   created_at DATETIME
 );
 
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id TEXT PRIMARY KEY,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  changes_summary TEXT,
+  snapshot_json TEXT,
+  created_at DATETIME NOT NULL
+);
+
 -- Full Text Search
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
   note,
@@ -66,4 +76,6 @@ CREATE INDEX IF NOT EXISTS idx_notes_type ON notes(type);
 CREATE INDEX IF NOT EXISTS idx_notes_status ON notes(status);
 CREATE INDEX IF NOT EXISTS idx_links_from_to ON links(from_note, to_note);
 CREATE INDEX IF NOT EXISTS idx_daily_logs_created_at ON daily_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_logs(created_at DESC);
 
