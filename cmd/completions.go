@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/tsusheel/kb-cli/db"
 	"github.com/tsusheel/kb-cli/utils"
 )
@@ -107,17 +108,45 @@ func completeAreas(cmd *cobra.Command, args []string, toComplete string) ([]stri
 	return areas, cobra.ShellCompDirectiveNoFileComp
 }
 
-// completeConfigKeys returns available config keys for kb config set / get
+// completeConfigKeys returns available config keys for kb config set / get / delete
 func completeConfigKeys(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	keys := []string{
-		"date_format\tCustom date formatting layout",
-		"remote.postgres_url\tRemote PostgreSQL connection URL",
-		"remote.enabled\tEnable/disable remote synchronization",
-		"remote.provider\tRemote provider name (postgres)",
-		"app_name\tApplication identifier",
-		"base_path\tBase directory for database and assets",
+	keySet := make(map[string]bool)
+	var completions []string
+
+	// 1. Keys currently in config.yaml
+	for _, k := range viper.AllKeys() {
+		if strings.HasPrefix(k, toComplete) || toComplete == "" {
+			keySet[k] = true
+			completions = append(completions, fmt.Sprintf("%s\tConfigured in config.yaml", k))
+		}
 	}
-	return keys, cobra.ShellCompDirectiveNoFileComp
+
+	// 2. Known secrets in OS Keyring
+	knownSecrets := []string{"postgres_password", "db_password", "remote_db_password"}
+	for _, s := range knownSecrets {
+		if (strings.HasPrefix(s, toComplete) || toComplete == "") && utils.HasSecret(s) && !keySet[s] {
+			keySet[s] = true
+			completions = append(completions, fmt.Sprintf("%s\tStored in OS Keyring", s))
+		}
+	}
+
+	// 3. Standard defaults
+	standard := []struct{ key, desc string }{
+		{"date_format", "Custom date formatting layout"},
+		{"remote.postgres_url", "Remote PostgreSQL connection URL"},
+		{"remote.enabled", "Enable/disable remote synchronization"},
+		{"remote.provider", "Remote provider name (postgres)"},
+		{"app_name", "Application identifier"},
+		{"base_path", "Base directory for database and assets"},
+	}
+	for _, s := range standard {
+		if (strings.HasPrefix(s.key, toComplete) || toComplete == "") && !keySet[s.key] {
+			keySet[s.key] = true
+			completions = append(completions, fmt.Sprintf("%s\t%s", s.key, s.desc))
+		}
+	}
+
+	return completions, cobra.ShellCompDirectiveNoFileComp
 }
 
 // completeSecretKeys returns available secret keys for kb config set-secret

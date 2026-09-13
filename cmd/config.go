@@ -108,6 +108,74 @@ var configGetCmd = &cobra.Command{
 	},
 }
 
+var configDeleteCmd = &cobra.Command{
+	Use:     "delete <key...>",
+	Aliases: []string{"rm", "del", "remove", "unset"},
+	Short:   "Delete a configuration option or secret",
+	Long: `Delete one or more configuration options from config.yaml or secrets from OS Keyring.
+
+Examples:
+  # Delete a config setting:
+  kb config delete test_key
+  kb config rm remote.enabled
+
+  # Delete a secret from OS Keyring:
+  kb config delete postgres_password
+  kb config delete --secret db_password
+
+  # Delete multiple keys:
+  kb config rm test_key custom_setting`,
+	Args: cobra.MinimumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		secretOnly, _ := cmd.Flags().GetBool("secret")
+		for _, key := range args {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+
+			deletedAny := false
+
+			if secretOnly {
+				if utils.HasSecret(key) {
+					if err := utils.DeleteSecret(key); err != nil {
+						return fmt.Errorf("failed to delete secret %q from OS Keyring: %w", key, err)
+					}
+					fmt.Printf("✔ Secret %q deleted from OS Keyring.\n", key)
+					deletedAny = true
+				} else {
+					fmt.Printf("⚠️  Secret %q was not found in OS Keyring.\n", key)
+				}
+				continue
+			}
+
+			// 1. Try deleting from config.yaml
+			deletedFromConfig, err := utils.DeleteConfigKey(key)
+			if err != nil {
+				return err
+			}
+			if deletedFromConfig {
+				fmt.Printf("✔ Configuration key %q removed from config.yaml\n", key)
+				deletedAny = true
+			}
+
+			// 2. Try deleting from OS Keyring if present
+			if utils.HasSecret(key) {
+				if err := utils.DeleteSecret(key); err != nil {
+					return fmt.Errorf("failed to delete secret %q from OS Keyring: %w", key, err)
+				}
+				fmt.Printf("✔ Secret %q deleted from OS Keyring.\n", key)
+				deletedAny = true
+			}
+
+			if !deletedAny {
+				fmt.Printf("⚠️  Key %q not found in config.yaml or OS Keyring.\n", key)
+			}
+		}
+		return nil
+	},
+}
+
 var configListCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"ls", "show"},
@@ -271,11 +339,14 @@ var configSetupCmd = &cobra.Command{
 func init() {
 	configSetCmd.ValidArgsFunction = completeConfigKeys
 	configGetCmd.ValidArgsFunction = completeConfigKeys
+	configDeleteCmd.ValidArgsFunction = completeConfigKeys
+	configDeleteCmd.Flags().BoolP("secret", "s", false, "Delete secret only from OS Keyring")
 	configSetSecretCmd.ValidArgsFunction = completeSecretKeys
 
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configSetSecretCmd)
 	configCmd.AddCommand(configGetCmd)
+	configCmd.AddCommand(configDeleteCmd)
 	configCmd.AddCommand(configListCmd)
 	configCmd.AddCommand(configSetupCmd)
 	rootCmd.AddCommand(configCmd)

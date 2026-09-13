@@ -215,6 +215,11 @@ kb config set-secret postgres_password
 # Inspect current configuration
 kb config list
 kb config get remote.postgres_url
+
+# Delete configuration options or OS Keyring secrets
+kb config delete custom_key
+kb config rm remote.enabled
+kb config delete --secret postgres_password
 ```
 
 ---

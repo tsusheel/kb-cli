@@ -282,6 +282,22 @@ kb link <from_id> <to_id> --type related_to
 kb link <from_id> <to_id> --type depends_on
 ```
 
+### 8. Configuration & Secrets (`kb config`)
+
+```bash
+# Set a public configuration value
+kb config set date_format "2006-01-02"
+
+# View all configuration settings and OS Keyring secret statuses
+kb config list
+kb config get remote.postgres_url
+
+# Delete configuration settings or OS Keyring secrets
+kb config delete test_key
+kb config rm remote.enabled
+kb config delete --secret postgres_password
+```
+
 
 
 ---
