@@ -19,6 +19,11 @@ type CLIItem struct {
 	IsLog     bool
 }
 
+// FormatFuzzy returns standardized fuzzy-finder string: [id] [date] (type)  note
+func (item CLIItem) FormatFuzzy() string {
+	return fmt.Sprintf("[%s] [%s] (%-12s)  %s", utils.ShortID(item.ID), item.Timestamp, item.Type, item.Display)
+}
+
 // completeNoteIDs returns active note IDs with titles as descriptions (e.g. "2d64a5a\tnew note")
 func completeNoteIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	notes, err := db.ListNotes("")

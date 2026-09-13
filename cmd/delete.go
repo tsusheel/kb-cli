@@ -7,7 +7,6 @@ import (
 	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
-	"github.com/tsusheel/kb-cli/utils"
 )
 
 var deleteReason string
@@ -122,7 +121,7 @@ Examples:
 			}
 
 			idxs, err := fuzzyfinder.FindMulti(items, func(i int) string {
-				return fmt.Sprintf("[%s] (%-12s) %s  [%s]", utils.ShortID(items[i].ID), items[i].Type, items[i].Display, items[i].Timestamp)
+				return items[i].FormatFuzzy()
 			})
 			if err != nil {
 				if err == fuzzyfinder.ErrAbort {

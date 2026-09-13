@@ -7,7 +7,6 @@ import (
 	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
-	"github.com/tsusheel/kb-cli/utils"
 )
 
 func restoreSingleItem(id string) error {
@@ -120,7 +119,7 @@ Examples:
 			}
 
 			idxs, err := fuzzyfinder.FindMulti(items, func(i int) string {
-				return fmt.Sprintf("[%s] (%-12s) %s  [deleted: %s]", utils.ShortID(items[i].ID), items[i].Type, items[i].Display, items[i].Timestamp)
+				return items[i].FormatFuzzy()
 			})
 			if err != nil {
 				if err == fuzzyfinder.ErrAbort {

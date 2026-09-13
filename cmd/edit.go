@@ -435,7 +435,7 @@ Examples:
 			}
 
 			idx, err := fuzzyfinder.Find(items, func(i int) string {
-				return fmt.Sprintf("[%s] (%-12s) %s  [%s]", utils.ShortID(items[i].ID), items[i].Type, items[i].Display, items[i].Timestamp)
+				return items[i].FormatFuzzy()
 			})
 			if err != nil {
 				if err == fuzzyfinder.ErrAbort {
