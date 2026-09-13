@@ -72,3 +72,56 @@ func TestDailyLogLifecycle(t *testing.T) {
 		t.Errorf("expected 1 active log, got %d", len(activeLogs))
 	}
 }
+
+func TestGetDailyLogsFilter(t *testing.T) {
+	setupTestDB(t)
+
+	// Create logs on different days
+	yesterday := time.Now().AddDate(0, 0, -1)
+	twoDaysAgo := time.Now().AddDate(0, 0, -2)
+
+	l1, _ := CreateDailyLog("Log from 2 days ago")
+	DB.Exec(`UPDATE daily_logs SET created_at = ? WHERE id = ?`, twoDaysAgo, l1.ID)
+
+	l2, _ := CreateDailyLog("Log from yesterday")
+	DB.Exec(`UPDATE daily_logs SET created_at = ? WHERE id = ?`, yesterday, l2.ID)
+
+	_, _ = CreateDailyLog("Log from today")
+
+	// 1. Query all-time
+	allLogs, err := GetDailyLogsFilter(nil, nil, true, false)
+	if err != nil {
+		t.Fatalf("GetDailyLogsFilter all-time failed: %v", err)
+	}
+	if len(allLogs) != 3 {
+		t.Errorf("expected 3 logs for all-time query, got %d", len(allLogs))
+	}
+
+	// 2. Query date range (twoDaysAgo to yesterday inclusive)
+	rangeLogs, err := GetDailyLogsFilter(&twoDaysAgo, &yesterday, true, false)
+	if err != nil {
+		t.Fatalf("GetDailyLogsFilter range failed: %v", err)
+	}
+	if len(rangeLogs) != 2 {
+		t.Errorf("expected 2 logs for range query, got %d", len(rangeLogs))
+	}
+
+	// 3. Query single date (yesterday)
+	yesterdayLogs, err := GetDailyLogsFilter(&yesterday, &yesterday, true, false)
+	if err != nil {
+		t.Fatalf("GetDailyLogsFilter single date failed: %v", err)
+	}
+	if len(yesterdayLogs) != 1 || yesterdayLogs[0].ID != l2.ID {
+		t.Errorf("expected 1 yesterday log matching l2, got %v", yesterdayLogs)
+	}
+
+	// 4. Query with from only (yesterday onwards)
+	now := time.Now()
+	fromLogs, err := GetDailyLogsFilter(&yesterday, &now, true, false)
+	if err != nil {
+		t.Fatalf("GetDailyLogsFilter from query failed: %v", err)
+	}
+	if len(fromLogs) != 2 {
+		t.Errorf("expected 2 logs for from query, got %d", len(fromLogs))
+	}
+}

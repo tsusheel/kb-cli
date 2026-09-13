@@ -106,8 +106,20 @@ kb log "Benchmarked query latency: 1.2ms average"
 # View today's timeline (unpromoted only)
 kb log
 
-# View all logs including promoted ones
+# View all logs for today (including promoted ones)
 kb log -a
+
+# View logs for a specific date
+kb log -d 2026-09-12
+kb log -d yesterday -a
+
+# View logs for an inclusive date range
+kb log --from 2026-09-01 --to 2026-09-13
+kb log -f -7d -a
+
+# View all historical logs across all time
+kb log -A
+kb log --all-time -a
 ```
 
 ---

@@ -237,6 +237,18 @@ kb log
 # View all of today's logs (including promoted ones)
 kb log -a
 
+# View logs for a specific date
+kb log -d 2026-09-12
+kb log -d yesterday -a
+
+# View logs for an inclusive date range
+kb log --from 2026-09-01 --to 2026-09-13
+kb log -f -7d -a
+
+# View all historical logs across all time
+kb log -A
+kb log --all-time -a
+
 # Promote a micro-log entry to a permanent Note
 kb promote 08db3db --type project
 ```

@@ -106,20 +106,36 @@ func GetDailyLog(id string) (*models.DailyLog, error) {
 	return &l, nil
 }
 
-func GetDailyLogsForDate(date time.Time, includePromoted bool) ([]models.DailyLog, error) {
-	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
-	endOfDay := startOfDay.AddDate(0, 0, 1)
-
-	var query string
+// GetDailyLogsFilter queries daily logs with optional date range, promotion status, and soft-delete filters.
+func GetDailyLogsFilter(startDate, endDate *time.Time, includePromoted bool, includeDeleted bool) ([]models.DailyLog, error) {
+	var whereClauses []string
 	var args []interface{}
 
-	if includePromoted {
-		query = `SELECT id, content, note_id, created_at, deleted_at, deleted_note FROM daily_logs WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL ORDER BY created_at ASC`
-		args = []interface{}{startOfDay, endOfDay}
-	} else {
-		query = `SELECT id, content, note_id, created_at, deleted_at, deleted_note FROM daily_logs WHERE created_at >= ? AND created_at < ? AND (note_id IS NULL OR note_id = '') AND deleted_at IS NULL ORDER BY created_at ASC`
-		args = []interface{}{startOfDay, endOfDay}
+	if !includeDeleted {
+		whereClauses = append(whereClauses, "deleted_at IS NULL")
 	}
+
+	if !includePromoted {
+		whereClauses = append(whereClauses, "(note_id IS NULL OR note_id = '')")
+	}
+
+	if startDate != nil {
+		startOfDay := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location())
+		whereClauses = append(whereClauses, "created_at >= ?")
+		args = append(args, startOfDay)
+	}
+
+	if endDate != nil {
+		endOfDay := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 0, 0, 0, 0, endDate.Location()).AddDate(0, 0, 1)
+		whereClauses = append(whereClauses, "created_at < ?")
+		args = append(args, endOfDay)
+	}
+
+	query := `SELECT id, content, note_id, created_at, deleted_at, deleted_note FROM daily_logs`
+	if len(whereClauses) > 0 {
+		query += ` WHERE ` + strings.Join(whereClauses, " AND ")
+	}
+	query += ` ORDER BY created_at ASC`
 
 	rows, err := DB.Query(query, args...)
 	if err != nil {
@@ -150,6 +166,10 @@ func GetDailyLogsForDate(date time.Time, includePromoted bool) ([]models.DailyLo
 	}
 
 	return logs, nil
+}
+
+func GetDailyLogsForDate(date time.Time, includePromoted bool) ([]models.DailyLog, error) {
+	return GetDailyLogsFilter(&date, &date, includePromoted, false)
 }
 
 func GetUnpromotedDailyLogs() ([]models.DailyLog, error) {

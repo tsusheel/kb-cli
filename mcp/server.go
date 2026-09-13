@@ -120,8 +120,10 @@ func registerTools(s *server.MCPServer) {
 
 	// 10. list_daily_logs
 	listDailyLogsTool := mcp.NewTool("list_daily_logs",
-		mcp.WithDescription("List daily stream micro-logs for today or a specific date."),
-		mcp.WithString("date", mcp.Description("Optional date (e.g., 'today', 'yesterday', '2026-09-06')")),
+		mcp.WithDescription("List daily stream micro-logs for today, a specific date, or an inclusive date range."),
+		mcp.WithString("date", mcp.Description("Optional specific date (e.g., 'today', 'yesterday', '2026-09-06')")),
+		mcp.WithString("from", mcp.Description("Optional inclusive start date (e.g., '2026-09-01', 'yesterday', '-7d')")),
+		mcp.WithString("to", mcp.Description("Optional inclusive end date (e.g., '2026-09-13', 'today')")),
 		mcp.WithBoolean("include_promoted", mcp.Description("Whether to include logs that were already promoted to notes (default true)")),
 	)
 	s.AddTool(listDailyLogsTool, handleListDailyLogs)
@@ -540,18 +542,46 @@ func handleCreateLog(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToo
 
 func handleListDailyLogs(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	dateStr := req.GetString("date", "")
+	fromStr := req.GetString("from", "")
+	toStr := req.GetString("to", "")
 	includePromoted := req.GetBool("include_promoted", true)
 
-	queryDate := time.Now()
+	var startDate *time.Time
+	var endDate *time.Time
+
 	if dateStr != "" {
 		parsedDate, err := utils.ParseDate(dateStr)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("invalid date format %q: %v", dateStr, err)), nil
 		}
-		queryDate = parsedDate
+		startDate = &parsedDate
+		endDate = &parsedDate
+	} else if fromStr != "" || toStr != "" {
+		if fromStr != "" {
+			t, err := utils.ParseDate(fromStr)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("invalid from date format %q: %v", fromStr, err)), nil
+			}
+			startDate = &t
+		}
+		if toStr != "" {
+			t, err := utils.ParseDate(toStr)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("invalid to date format %q: %v", toStr, err)), nil
+			}
+			endDate = &t
+		}
+		if startDate != nil && endDate == nil {
+			now := time.Now()
+			endDate = &now
+		}
+	} else {
+		now := time.Now()
+		startDate = &now
+		endDate = &now
 	}
 
-	logs, err := db.GetDailyLogsForDate(queryDate, includePromoted)
+	logs, err := db.GetDailyLogsFilter(startDate, endDate, includePromoted, false)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to list daily logs: %v", err)), nil
 	}

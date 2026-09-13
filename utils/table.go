@@ -150,8 +150,20 @@ func RenderDailyLogsTable(logs []models.DailyLog, out io.Writer) {
 		return
 	}
 
+	// Determine if logs span multiple days
+	sameDay := true
+	if len(logs) > 1 {
+		firstDay := logs[0].CreatedAt.Format("2006-01-02")
+		for _, l := range logs[1:] {
+			if l.CreatedAt.Format("2006-01-02") != firstDay {
+				sameDay = false
+				break
+			}
+		}
+	}
+
 	termWidth := GetTerminalWidth()
-	maxColWidth := termWidth - 42
+	maxColWidth := termWidth - 46
 	if maxColWidth < 30 {
 		maxColWidth = 30
 	}
@@ -159,9 +171,14 @@ func RenderDailyLogsTable(logs []models.DailyLog, out io.Writer) {
 		maxColWidth = 80
 	}
 
+	timeHeader := "TIME"
+	if !sameDay {
+		timeHeader = "DATE/TIME"
+	}
+
 	table := tablewriter.NewTable(
 		out,
-		tablewriter.WithHeader([]string{"ID", "TIME", "CONTENT", "STATUS"}),
+		tablewriter.WithHeader([]string{"ID", timeHeader, "CONTENT", "STATUS"}),
 		tablewriter.WithHeaderAutoFormat(tw.Off),
 		tablewriter.WithRendition(tw.Rendition{
 			Symbols: tw.NewSymbols(tw.StyleRounded),
@@ -183,9 +200,13 @@ func RenderDailyLogsTable(logs []models.DailyLog, out io.Writer) {
 		if l.NoteID != "" {
 			status = fmt.Sprintf("promoted (%s)", ShortID(l.NoteID))
 		}
+		timeStr := l.CreatedAt.Format("15:04")
+		if !sameDay {
+			timeStr = l.CreatedAt.Format("2006-01-02 15:04")
+		}
 		table.Append([]string{
 			ShortID(l.ID),
-			l.CreatedAt.Format("15:04"),
+			timeStr,
 			l.Content,
 			status,
 		})

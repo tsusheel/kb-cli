@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var offsetRegex = regexp.MustCompile(`^(?:\+|\bin\s+)?(\d+)\s*(d|day|days|w|week|weeks|m|month|months|y|year|years)$`)
+var offsetRegex = regexp.MustCompile(`^(?:\+|\bin\s+)?(-?\d+)\s*(d|day|days|w|week|weeks|m|month|months|y|year|years)(?:\s+ago)?$`)
 
 func ParseDate(input string) (time.Time, error) {
 	input = strings.TrimSpace(input)
@@ -46,9 +46,12 @@ func ParseDate(input string) (time.Time, error) {
 		return nextWeekday(today, time.Saturday), nil
 	}
 
-	// 2. Relative offsets like "+3d", "+2w", "in 5 days", "1week"
+	// 2. Relative offsets like "+3d", "-7d", "in 5 days", "3 days ago", "1week"
 	if matches := offsetRegex.FindStringSubmatch(lower); len(matches) == 3 {
 		amount, _ := strconv.Atoi(matches[1])
+		if strings.HasSuffix(lower, "ago") && amount > 0 {
+			amount = -amount
+		}
 		unit := matches[2]
 		switch {
 		case strings.HasPrefix(unit, "d"):
