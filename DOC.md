@@ -99,21 +99,27 @@ kb today
 ---
 
 ### 6. Promote Log to Note (`kb promote`)
-Promote a daily log entry non-interactively into a permanent, typed `Note` in `< 50ms`:
+Promote a daily log entry non-interactively into a permanent active `Note` in `< 50ms`:
 ```bash
-kb promote 08db3db --type project --status active
+kb promote 08db3db --type project
 ```
 
 ---
 
 ### 7. Inbox & Triage (`kb inbox` / `kb triage`)
-View all unrefined raw thoughts and unpromoted logs, or launch the interactive terminal triage wizard:
+View today's raw unrefined thoughts, or launch the interactive terminal triage wizard:
 ```bash
-# View pending raw items
+# View today's raw notes awaiting triage
 kb inbox
 
-# Launch interactive triage wizard
+# View all raw notes across all dates
+kb inbox -a
+
+# Interactively triage today's raw notes
 kb triage
+
+# Interactively triage all raw notes across all dates
+kb triage -a
 ```
 
 ---

@@ -98,11 +98,3 @@ func PromptSecret(promptText string) (string, error) {
 	}
 	return strings.TrimSpace(string(bytePassword)), nil
 }
-
-// ShortID truncates full UUIDs to 7 characters for clean terminal display.
-func ShortID(id string) string {
-	if len(id) > 7 {
-		return id[:7]
-	}
-	return id
-}

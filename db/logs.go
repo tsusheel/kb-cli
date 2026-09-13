@@ -195,7 +195,7 @@ func PromoteDailyLog(logID string, noteType models.NoteType, noteStatus models.S
 		noteType = models.DefaultNote
 	}
 	if noteStatus == "" {
-		noteStatus = models.Raw
+		noteStatus = models.Active
 	}
 
 	noteID := strings.ReplaceAll(uuid.New().String(), "-", "")

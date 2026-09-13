@@ -233,14 +233,20 @@ kb log
 kb promote 08db3db --type project
 ```
 
-### 4. Inbox & Triage
+### 5. Inbox & Triage
 
 ```bash
-# View raw unrefined notes and unpromoted logs
+# View today's raw unrefined notes awaiting triage
 kb inbox
 
-# Launch interactive terminal triage wizard
+# View all raw notes across all dates
+kb inbox -a
+
+# Launch interactive terminal triage wizard for today's raw notes
 kb triage
+
+# Triage all raw notes across all dates
+kb triage -a
 ```
 
 ### 5. Full-Text Search

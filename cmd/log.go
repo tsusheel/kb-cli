@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/tsusheel/kb-cli/db"
 	"github.com/tsusheel/kb-cli/utils"
 )
+
 
 var showAllLogs bool
 
@@ -23,17 +25,11 @@ func displayTodayLogs(date time.Time, includePromoted bool) error {
 		return nil
 	}
 
-	fmt.Printf("=== [%s] Daily Stream ===\n", date.Format("2006-01-02"))
-	for _, l := range logs {
-		status := ""
-		if l.NoteID != "" {
-			status = fmt.Sprintf(" (promoted -> [%s])", utils.ShortID(l.NoteID))
-		}
-		fmt.Printf("%s  [%s]  %s%s\n", l.CreatedAt.Format("15:04"), utils.ShortID(l.ID), l.Content, status)
-	}
-	fmt.Println("=================================")
+	fmt.Printf("=== [%s] Daily Stream (%d) ===\n", date.Format("2006-01-02"), len(logs))
+	utils.RenderDailyLogsTable(logs, os.Stdout)
 	return nil
 }
+
 
 var logCmd = &cobra.Command{
 	Use:   "log [entry]",

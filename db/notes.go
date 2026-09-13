@@ -271,3 +271,56 @@ func SearchNotes(searchTerm string) ([]models.Note, error) {
 
 	return notes, nil
 }
+
+// GetRawNotes returns raw unrefined notes for today (todayOnly=true) or all time (todayOnly=false).
+func GetRawNotes(todayOnly bool) ([]models.Note, error) {
+	var query string
+	var args []interface{}
+
+	if todayOnly {
+		now := time.Now()
+		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		endOfDay := startOfDay.AddDate(0, 0, 1)
+
+		query = `SELECT id, note, note_flesh, type, status, area, target_date_time, created_at, updated_at, deleted_at, deleted_note 
+		         FROM notes 
+		         WHERE status = 'raw' AND deleted_at IS NULL AND created_at >= ? AND created_at < ? 
+		         ORDER BY updated_at DESC`
+		args = []interface{}{startOfDay, endOfDay}
+	} else {
+		query = `SELECT id, note, note_flesh, type, status, area, target_date_time, created_at, updated_at, deleted_at, deleted_note 
+		         FROM notes 
+		         WHERE status = 'raw' AND deleted_at IS NULL 
+		         ORDER BY updated_at DESC`
+	}
+
+	rows, err := DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var notes []models.Note
+	for rows.Next() {
+		var n models.Note
+		var targetDT sql.NullTime
+		var deletedDT sql.NullTime
+		var deletedNote sql.NullString
+		err := rows.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt, &deletedDT, &deletedNote)
+		if err != nil {
+			return nil, err
+		}
+		if targetDT.Valid {
+			n.TargetDateTime = targetDT.Time
+		}
+		if deletedDT.Valid {
+			n.DeletedAt = deletedDT.Time
+		}
+		if deletedNote.Valid {
+			n.DeletedNote = deletedNote.String
+		}
+		notes = append(notes, n)
+	}
+
+	return notes, nil
+}

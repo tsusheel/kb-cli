@@ -34,7 +34,7 @@ var promoteCmd = &cobra.Command{
 func init() {
 	promoteCmd.ValidArgsFunction = completeUnpromotedLogIDs
 	promoteCmd.Flags().StringVarP(&promoteType, "type", "t", string(models.DefaultNote), "Note type for the promoted note (e.g., note, todo, idea, project)")
-	promoteCmd.Flags().StringVarP(&promoteStatus, "status", "s", string(models.Raw), "Status for the promoted note (default 'raw')")
+	promoteCmd.Flags().StringVarP(&promoteStatus, "status", "s", string(models.Active), "Status for the promoted note (default 'active')")
 	promoteCmd.RegisterFlagCompletionFunc("type", completeNoteTypes)
 	promoteCmd.RegisterFlagCompletionFunc("status", completeNoteStatuses)
 	rootCmd.AddCommand(promoteCmd)

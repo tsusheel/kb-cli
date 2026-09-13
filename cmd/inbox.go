@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
@@ -13,66 +12,68 @@ import (
 	"github.com/tsusheel/kb-cli/utils"
 )
 
+var (
+	inboxShowAll  bool
+	triageShowAll bool
+)
+
 var inboxCmd = &cobra.Command{
 	Use:   "inbox",
-	Short: "View unrefined raw notes and unpromoted daily logs awaiting triage",
+	Short: "View raw notes awaiting triage (today's notes by default, or all with -a/--all)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		rawNotes, err := db.ListNotesExtended("", string(models.Raw), "", false)
-		if err != nil {
-			return err
-		}
-
-		unpromotedLogs, err := db.GetUnpromotedDailyLogs()
-		if err != nil {
-			return err
-		}
-
-		if len(rawNotes) == 0 && len(unpromotedLogs) == 0 {
-			fmt.Println("Inbox is clear! No raw notes or unpromoted logs.")
-			return nil
-		}
-
-		if len(rawNotes) > 0 {
-			fmt.Printf("=== Raw Notes Awaiting Triage (%d) ===\n", len(rawNotes))
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			for _, n := range rawNotes {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", utils.ShortID(n.ID), n.Note, n.Type, n.UpdatedAt.Format("2006-01-02 15:04"))
-			}
-			w.Flush()
-			fmt.Println()
-		}
-
-		if len(unpromotedLogs) > 0 {
-			fmt.Printf("=== Unpromoted Daily Logs (%d) ===\n", len(unpromotedLogs))
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			for _, l := range unpromotedLogs {
-				fmt.Fprintf(w, "%s\t%s\t%s\n", utils.ShortID(l.ID), l.Content, l.CreatedAt.Format("2006-01-02 15:04"))
-			}
-			w.Flush()
-			fmt.Println()
-		}
-
-		fmt.Println("Tip: Run 'kb triage' to interactively process your inbox.")
-		return nil
-	},
-}
-
-var triageCmd = &cobra.Command{
-	Use:   "triage",
-	Short: "Interactive triage wizard to process raw notes and fleeting thoughts",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		rawNotes, err := db.ListNotesExtended("", string(models.Raw), "", false)
+		rawNotes, err := db.GetRawNotes(!inboxShowAll)
 		if err != nil {
 			return err
 		}
 
 		if len(rawNotes) == 0 {
-			fmt.Println("No raw notes in inbox to triage!")
+			if inboxShowAll {
+				fmt.Println("Inbox is clear! No raw notes.")
+			} else {
+				fmt.Println("Today's inbox is clear! No raw notes for today.")
+				fmt.Println("Tip: Run 'kb inbox -a' to view all raw notes across all dates.")
+			}
+			return nil
+		}
+
+		if inboxShowAll {
+			fmt.Printf("=== All Raw Notes Awaiting Triage (%d) ===\n", len(rawNotes))
+		} else {
+			fmt.Printf("=== Today's Raw Notes Awaiting Triage (%d) ===\n", len(rawNotes))
+		}
+
+		utils.RenderInboxTable(rawNotes, os.Stdout)
+
+		fmt.Println("\nTip: Run 'kb triage' to interactively process today's notes ('kb triage -a' for all).")
+		return nil
+	},
+}
+
+
+var triageCmd = &cobra.Command{
+	Use:   "triage",
+	Short: "Interactive triage wizard to process raw notes (today's notes by default, or all with -a/--all)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		rawNotes, err := db.GetRawNotes(!triageShowAll)
+		if err != nil {
+			return err
+		}
+
+		if len(rawNotes) == 0 {
+			if triageShowAll {
+				fmt.Println("No raw notes to triage!")
+			} else {
+				fmt.Println("No raw notes for today to triage! Run 'kb triage -a' to triage all raw notes.")
+			}
 			return nil
 		}
 
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Starting triage of %d raw notes...\n\n", len(rawNotes))
+		headerScope := "today's"
+		if triageShowAll {
+			headerScope = "all"
+		}
+		fmt.Printf("Starting triage of %d %s raw notes...\n\n", len(rawNotes), headerScope)
 
 		for i, n := range rawNotes {
 			fmt.Printf("--------------------------------------------------\n")
@@ -98,7 +99,7 @@ var triageCmd = &cobra.Command{
 					n.NoteFlesh = strings.TrimSpace(flesh)
 					n.Status = models.Refined
 					db.UpdateNote(&n)
-					fmt.Printf("Note marked as refined.\n")
+					fmt.Printf("✔ Note marked as refined.\n")
 				}
 			case "t", "type":
 				fmt.Print("Enter new type (todo, idea, project, concept, decision, note): ")
@@ -106,8 +107,11 @@ var triageCmd = &cobra.Command{
 				newType = strings.TrimSpace(newType)
 				if newType != "" {
 					n.Type = models.NoteType(newType)
+					if n.Status == models.Raw {
+						n.Status = models.Active
+					}
 					db.UpdateNote(&n)
-					fmt.Printf("Type updated to %s.\n", newType)
+					fmt.Printf("✔ Type updated to %s (status marked active).\n", newType)
 				}
 			case "s", "status":
 				fmt.Print("Enter status (active, refined, in-progress, completed, archived): ")
@@ -116,7 +120,7 @@ var triageCmd = &cobra.Command{
 				if newStatus != "" {
 					n.Status = models.Status(newStatus)
 					db.UpdateNote(&n)
-					fmt.Printf("Status updated to %s.\n", newStatus)
+					fmt.Printf("✔ Status updated to %s.\n", newStatus)
 				}
 			case "d", "due":
 				fmt.Print("Enter due date (e.g. today, tomorrow, monday, +3d, 2026-09-10): ")
@@ -126,8 +130,11 @@ var triageCmd = &cobra.Command{
 					targetDT, err := utils.ParseDate(dueInput)
 					if err == nil {
 						n.TargetDateTime = targetDT
+						if n.Status == models.Raw {
+							n.Status = models.Active
+						}
 						db.UpdateNote(&n)
-						fmt.Printf("Target date set to %s.\n", targetDT.Format("2006-01-02"))
+						fmt.Printf("✔ Target date set to %s (status marked active).\n", targetDT.Format("2006-01-02"))
 					} else {
 						fmt.Printf("Invalid date: %v\n", err)
 					}
@@ -138,15 +145,19 @@ var triageCmd = &cobra.Command{
 				tagInput = strings.TrimSpace(tagInput)
 				if tagInput != "" {
 					db.AddTag(n.ID, tagInput)
-					fmt.Printf("Added tag %s.\n", tagInput)
+					if n.Status == models.Raw {
+						n.Status = models.Active
+						db.UpdateNote(&n)
+					}
+					fmt.Printf("✔ Added tag %s (status marked active).\n", tagInput)
 				}
 			case "c", "complete":
 				n.Status = models.Completed
 				db.UpdateNote(&n)
-				fmt.Println("Note marked as completed.")
+				fmt.Println("✔ Note marked as completed.")
 			case "D", "delete":
 				db.SoftDeleteNote(n.ID, "deleted during triage")
-				fmt.Println("Note deleted.")
+				fmt.Println("✔ Note deleted.")
 			default:
 				// Skip to next
 			}
@@ -158,6 +169,9 @@ var triageCmd = &cobra.Command{
 }
 
 func init() {
+	inboxCmd.Flags().BoolVarP(&inboxShowAll, "all", "a", false, "Show all raw notes across all dates")
+	triageCmd.Flags().BoolVarP(&triageShowAll, "all", "a", false, "Triage all raw notes across all dates")
+
 	rootCmd.AddCommand(inboxCmd)
 	rootCmd.AddCommand(triageCmd)
 }
