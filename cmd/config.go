@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -106,30 +106,37 @@ var configListCmd = &cobra.Command{
 	Aliases: []string{"ls", "show"},
 	Short:   "List all configuration settings and secret statuses",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "KEY\tVALUE\tSOURCE")
-		fmt.Fprintln(w, "---\t-----\t------")
+		var items []utils.ConfigItem
 
 		// List Viper settings
 		keys := viper.AllKeys()
+		sort.Strings(keys)
 		for _, k := range keys {
 			val := viper.GetString(k)
 			// Mask passwords in URLs if any
 			if strings.Contains(k, "url") || strings.Contains(k, "conn") {
 				val = utils.MaskURL(val)
 			}
-			fmt.Fprintf(w, "%s\t%s\tconfig.yaml\n", k, val)
+			items = append(items, utils.ConfigItem{
+				Key:    k,
+				Value:  val,
+				Source: "config.yaml",
+			})
 		}
 
 		// List Known Secrets Status
 		knownSecrets := []string{"postgres_password", "db_password", "remote_db_password"}
 		for _, s := range knownSecrets {
 			if utils.HasSecret(s) {
-				fmt.Fprintf(w, "%s\t[ENCRYPTED / SECURE]\tOS Keyring\n", s)
+				items = append(items, utils.ConfigItem{
+					Key:    s,
+					Value:  "[ENCRYPTED / SECURE]",
+					Source: "OS Keyring",
+				})
 			}
 		}
 
-		w.Flush()
+		utils.RenderConfigTable(items, os.Stdout)
 		return nil
 	},
 }

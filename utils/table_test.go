@@ -117,4 +117,41 @@ func TestRenderNoteDetail(t *testing.T) {
 	}
 }
 
+func TestRenderConfigTable(t *testing.T) {
+	items := []ConfigItem{
+		{
+			Key:    "editor",
+			Value:  "code --wait",
+			Source: "config.yaml",
+		},
+		{
+			Key:    "postgres_password",
+			Value:  "[ENCRYPTED / SECURE]",
+			Source: "OS Keyring",
+		},
+	}
 
+	var buf bytes.Buffer
+	RenderConfigTable(items, &buf)
+
+	output := buf.String()
+	if !strings.Contains(output, "KEY") || !strings.Contains(output, "VALUE") || !strings.Contains(output, "SOURCE") {
+		t.Errorf("expected config table headers, got:\n%s", output)
+	}
+	if !strings.Contains(output, "editor") || !strings.Contains(output, "code --wait") {
+		t.Errorf("expected editor config row, got:\n%s", output)
+	}
+	if !strings.Contains(output, "postgres_password") || !strings.Contains(output, "[ENCRYPTED / SECURE]") {
+		t.Errorf("expected secret config row, got:\n%s", output)
+	}
+}
+
+func TestRenderConfigTableEmpty(t *testing.T) {
+	var buf bytes.Buffer
+	RenderConfigTable([]ConfigItem{}, &buf)
+
+	output := strings.TrimSpace(buf.String())
+	if output != "No configuration found." {
+		t.Errorf("expected 'No configuration found.', got %q", output)
+	}
+}

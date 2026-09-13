@@ -316,6 +316,58 @@ func RenderNoteDetail(n *models.Note, tags []models.Tag, links []models.Link, ou
 	}
 }
 
+// ConfigItem represents a configuration or secret key-value-source entry.
+type ConfigItem struct {
+	Key    string
+	Value  string
+	Source string
+}
 
+// RenderConfigTable renders configuration settings and secret statuses in a beautiful rounded table.
+func RenderConfigTable(items []ConfigItem, out io.Writer) {
+	if len(items) == 0 {
+		fmt.Fprintln(out, "No configuration found.")
+		return
+	}
+	if out == nil {
+		out = os.Stdout
+	}
 
+	termWidth := GetTerminalWidth()
+	maxValWidth := termWidth - 45
+	if maxValWidth < 30 {
+		maxValWidth = 30
+	}
+	if maxValWidth > 80 {
+		maxValWidth = 80
+	}
 
+	table := tablewriter.NewTable(
+		out,
+		tablewriter.WithHeader([]string{"KEY", "VALUE", "SOURCE"}),
+		tablewriter.WithHeaderAutoFormat(tw.Off),
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbols(tw.StyleRounded),
+			Settings: tw.Settings{
+				Separators: tw.Separators{
+					BetweenRows:    tw.On,
+					BetweenColumns: tw.On,
+					ShowHeader:     tw.On,
+				},
+			},
+		}),
+		tablewriter.WithRowMaxWidth(maxValWidth),
+		tablewriter.WithHeaderAlignment(tw.AlignLeft),
+		tablewriter.WithRowAlignment(tw.AlignLeft),
+	)
+
+	for _, item := range items {
+		table.Append([]string{
+			item.Key,
+			item.Value,
+			item.Source,
+		})
+	}
+
+	table.Render()
+}
