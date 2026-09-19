@@ -83,7 +83,12 @@ Examples:
 
 			idxs, err := fuzzyfinder.FindMulti(items, func(i int) string {
 				return items[i].FormatFuzzy()
-			})
+			}, fuzzyfinder.WithPreviewWindow(func(i int, width, height int) string {
+				if i < 0 || i >= len(items) {
+					return ""
+				}
+				return items[i].RenderPreview()
+			}))
 			if err != nil {
 				if err == fuzzyfinder.ErrAbort {
 					return nil

@@ -270,7 +270,7 @@ func ListNotesExtended(filterType, filterStatus, filterArea string, includeDelet
 		args = append(args, filterArea)
 	}
 
-	query := "SELECT id, note, type, status, area, target_date_time, created_at, updated_at, deleted_at, deleted_note FROM notes"
+	query := "SELECT id, note, note_flesh, type, status, area, target_date_time, created_at, updated_at, deleted_at, deleted_note FROM notes"
 	if len(whereClauses) > 0 {
 		query += " WHERE " + strings.Join(whereClauses, " AND ")
 	}
@@ -288,7 +288,7 @@ func ListNotesExtended(filterType, filterStatus, filterArea string, includeDelet
 		var targetDT sql.NullTime
 		var deletedDT sql.NullTime
 		var deletedNote sql.NullString
-		err := rows.Scan(&n.ID, &n.Note, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt, &deletedDT, &deletedNote)
+		err := rows.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt, &deletedDT, &deletedNote)
 		if err != nil {
 			return nil, err
 		}
@@ -325,7 +325,7 @@ func SearchNotesExtended(searchTerm, filterType, filterStatus, filterArea string
 	}
 
 	query := fmt.Sprintf(`
-		SELECT n.id, n.note, n.type, n.status, n.area, n.target_date_time, n.created_at, n.updated_at 
+		SELECT n.id, n.note, n.note_flesh, n.type, n.status, n.area, n.target_date_time, n.created_at, n.updated_at 
 		FROM notes_fts fts
 		JOIN notes n ON n.id = fts.note_id
 		WHERE %s
@@ -342,7 +342,7 @@ func SearchNotesExtended(searchTerm, filterType, filterStatus, filterArea string
 	for rows.Next() {
 		var n models.Note
 		var targetDT sql.NullTime
-		err := rows.Scan(&n.ID, &n.Note, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt)
+		err := rows.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}

@@ -12,16 +12,92 @@ import (
 
 // CLIItem represents a selectable note or daily log in fuzzy finders
 type CLIItem struct {
-	ID        string
-	Type      string
-	Display   string
-	Timestamp string
-	IsLog     bool
+	ID            string
+	Type          string
+	Status        string
+	Area          string
+	Display       string
+	Flesh         string
+	Tags          []string
+	Timestamp     string
+	IsLog         bool
+	DeletedReason string
 }
 
-// FormatFuzzy returns standardized fuzzy-finder string: [id] [date] (type)  note
+// FormatFuzzy returns standardized fuzzy-finder string: [id] [date] (type:status) [area] [#tags]  title — flesh
 func (item CLIItem) FormatFuzzy() string {
-	return fmt.Sprintf("[%s] [%s] (%-12s)  %s", utils.ShortID(item.ID), item.Timestamp, item.Type, item.Display)
+	shortID := utils.ShortID(item.ID)
+	typeStr := item.Type
+	if item.Status != "" && !item.IsLog {
+		typeStr = fmt.Sprintf("%s:%s", item.Type, item.Status)
+	}
+
+	var meta []string
+	if item.Area != "" {
+		meta = append(meta, string(item.Area))
+	}
+	if len(item.Tags) > 0 {
+		meta = append(meta, "#"+strings.Join(item.Tags, " #"))
+	}
+	metaStr := ""
+	if len(meta) > 0 {
+		metaStr = " [" + strings.Join(meta, " ") + "]"
+	}
+
+	fleshSnippet := ""
+	if item.Flesh != "" {
+		cleanedFlesh := strings.ReplaceAll(item.Flesh, "\r\n", " ")
+		cleanedFlesh = strings.ReplaceAll(cleanedFlesh, "\n", " ")
+		cleanedFlesh = strings.ReplaceAll(cleanedFlesh, "\t", " ")
+		cleanedFlesh = strings.TrimSpace(cleanedFlesh)
+		if len(cleanedFlesh) > 0 {
+			fleshSnippet = " — " + cleanedFlesh
+		}
+	}
+
+	return fmt.Sprintf("[%s] [%s] (%-10s)%s  %s%s", shortID, item.Timestamp, typeStr, metaStr, item.Display, fleshSnippet)
+}
+
+// RenderPreview generates formatted terminal text for the fuzzy-finder preview pane
+func (item CLIItem) RenderPreview() string {
+	var b strings.Builder
+	if item.IsLog {
+		b.WriteString(fmt.Sprintf("=== DAILY LOG [%s] ===\n\n", utils.ShortID(item.ID)))
+		b.WriteString(fmt.Sprintf("Created  : %s\n", item.Timestamp))
+		if item.Type == "log:promoted" {
+			b.WriteString("Status   : Promoted to Note\n")
+		}
+		if item.DeletedReason != "" {
+			b.WriteString(fmt.Sprintf("Deleted  : %s\n", item.DeletedReason))
+		}
+		b.WriteString(fmt.Sprintf("\nContent  :\n%s\n", item.Display))
+	} else {
+		b.WriteString(fmt.Sprintf("=== NOTE [%s] ===\n\n", utils.ShortID(item.ID)))
+		b.WriteString(fmt.Sprintf("Title    : %s\n", item.Display))
+		b.WriteString(fmt.Sprintf("Type     : %s\n", item.Type))
+		if item.Status != "" {
+			b.WriteString(fmt.Sprintf("Status   : %s\n", item.Status))
+		}
+		if item.Area != "" {
+			b.WriteString(fmt.Sprintf("Area     : %s\n", item.Area))
+		}
+		b.WriteString(fmt.Sprintf("Updated  : %s\n", item.Timestamp))
+		if len(item.Tags) > 0 {
+			b.WriteString(fmt.Sprintf("Tags     : #%s\n", strings.Join(item.Tags, " #")))
+		}
+		if item.DeletedReason != "" {
+			b.WriteString(fmt.Sprintf("Deleted  : %s\n", item.DeletedReason))
+		}
+		b.WriteString("\n--- BODY / FLESH ---\n")
+		trimmedFlesh := strings.TrimSpace(item.Flesh)
+		if trimmedFlesh != "" {
+			b.WriteString(trimmedFlesh)
+		} else {
+			b.WriteString("(no flesh body)")
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 // GetActiveCLIItems fetches all active notes and daily logs formatted as CLIItems.
@@ -34,14 +110,21 @@ func GetActiveCLIItems() ([]CLIItem, error) {
 		return nil, err
 	}
 	for _, n := range notes {
-		displayTitle := n.Note
-		if len(displayTitle) > 60 {
-			displayTitle = displayTitle[:57] + "..."
+		var tagNames []string
+		if tags, err := db.GetTagsForNote(n.ID); err == nil {
+			for _, t := range tags {
+				tagNames = append(tagNames, t.Name)
+			}
 		}
+
 		items = append(items, CLIItem{
 			ID:        n.ID,
 			Type:      string(n.Type),
-			Display:   displayTitle,
+			Status:    string(n.Status),
+			Area:      string(n.Area),
+			Display:   n.Note,
+			Flesh:     n.NoteFlesh,
+			Tags:      tagNames,
 			Timestamp: n.UpdatedAt.Format("2006-01-02 15:04"),
 			IsLog:     false,
 		})
@@ -53,10 +136,6 @@ func GetActiveCLIItems() ([]CLIItem, error) {
 		return nil, err
 	}
 	for _, l := range logs {
-		content := l.Content
-		if len(content) > 60 {
-			content = content[:57] + "..."
-		}
 		logType := "log"
 		if l.NoteID != "" {
 			logType = "log:promoted"
@@ -64,7 +143,7 @@ func GetActiveCLIItems() ([]CLIItem, error) {
 		items = append(items, CLIItem{
 			ID:        l.ID,
 			Type:      logType,
-			Display:   content,
+			Display:   l.Content,
 			Timestamp: l.CreatedAt.Format("2006-01-02 15:04"),
 			IsLog:     true,
 		})
@@ -84,19 +163,24 @@ func GetDeletedCLIItems() ([]CLIItem, error) {
 	}
 	for _, n := range allNotes {
 		if !n.DeletedAt.IsZero() {
-			displayTitle := n.Note
-			if len(displayTitle) > 60 {
-				displayTitle = displayTitle[:57] + "..."
+			var tagNames []string
+			if tags, err := db.GetTagsForNote(n.ID); err == nil {
+				for _, t := range tags {
+					tagNames = append(tagNames, t.Name)
+				}
 			}
-			if n.DeletedNote != "" {
-				displayTitle = fmt.Sprintf("%s (%s)", displayTitle, n.DeletedNote)
-			}
+
 			items = append(items, CLIItem{
-				ID:        n.ID,
-				Type:      string(n.Type),
-				Display:   displayTitle,
-				Timestamp: n.DeletedAt.Format("2006-01-02 15:04"),
-				IsLog:     false,
+				ID:            n.ID,
+				Type:          string(n.Type),
+				Status:        string(n.Status),
+				Area:          string(n.Area),
+				Display:       n.Note,
+				Flesh:         n.NoteFlesh,
+				Tags:          tagNames,
+				Timestamp:     n.DeletedAt.Format("2006-01-02 15:04"),
+				IsLog:         false,
+				DeletedReason: n.DeletedNote,
 			})
 		}
 	}
@@ -108,19 +192,13 @@ func GetDeletedCLIItems() ([]CLIItem, error) {
 	}
 	for _, l := range allLogs {
 		if !l.DeletedAt.IsZero() {
-			content := l.Content
-			if len(content) > 60 {
-				content = content[:57] + "..."
-			}
-			if l.DeletedNote != "" {
-				content = fmt.Sprintf("%s (%s)", content, l.DeletedNote)
-			}
 			items = append(items, CLIItem{
-				ID:        l.ID,
-				Type:      "log",
-				Display:   content,
-				Timestamp: l.DeletedAt.Format("2006-01-02 15:04"),
-				IsLog:     true,
+				ID:            l.ID,
+				Type:          "log",
+				Display:       l.Content,
+				Timestamp:     l.DeletedAt.Format("2006-01-02 15:04"),
+				IsLog:         true,
+				DeletedReason: l.DeletedNote,
 			})
 		}
 	}

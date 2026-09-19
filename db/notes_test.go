@@ -238,3 +238,42 @@ func TestUpdateAndSoftDeleteNote(t *testing.T) {
 		t.Errorf("expected 0 search results for deleted note, got %d", len(searchResults))
 	}
 }
+
+func TestListAndSearchIncludesFlesh(t *testing.T) {
+	setupTestDB(t)
+
+	n := &models.Note{
+		Note:      "Architecture Documentation",
+		NoteFlesh: "Detailed PostgreSQL clustering and replication topology",
+		Type:      models.DefaultNote,
+		Status:    models.Raw,
+		Area:      models.Work,
+	}
+	if err := CreateNote(n); err != nil {
+		t.Fatalf("CreateNote failed: %v", err)
+	}
+
+	// 1. Verify ListNotesExtended includes NoteFlesh
+	notes, err := ListNotesExtended("", "", "", false)
+	if err != nil {
+		t.Fatalf("ListNotesExtended failed: %v", err)
+	}
+	if len(notes) != 1 {
+		t.Fatalf("expected 1 note, got %d", len(notes))
+	}
+	if notes[0].NoteFlesh != n.NoteFlesh {
+		t.Errorf("ListNotesExtended NoteFlesh = %q, expected %q", notes[0].NoteFlesh, n.NoteFlesh)
+	}
+
+	// 2. Verify SearchNotesExtended includes NoteFlesh
+	searchNotes, err := SearchNotesExtended("topology", "", "", "")
+	if err != nil {
+		t.Fatalf("SearchNotesExtended failed: %v", err)
+	}
+	if len(searchNotes) != 1 {
+		t.Fatalf("expected 1 search result for 'topology', got %d", len(searchNotes))
+	}
+	if searchNotes[0].NoteFlesh != n.NoteFlesh {
+		t.Errorf("SearchNotesExtended NoteFlesh = %q, expected %q", searchNotes[0].NoteFlesh, n.NoteFlesh)
+	}
+}
