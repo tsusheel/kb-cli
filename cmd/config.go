@@ -203,10 +203,14 @@ var configListCmd = &cobra.Command{
 		knownSecrets := []string{"postgres_password", "db_password", "remote_db_password"}
 		for _, s := range knownSecrets {
 			if utils.HasSecret(s) {
+				source := utils.GetSecretSource(s)
+				if source == "" {
+					source = "Secure Vault"
+				}
 				items = append(items, utils.ConfigItem{
 					Key:    s,
 					Value:  "[ENCRYPTED / SECURE]",
-					Source: "OS Keyring",
+					Source: source,
 				})
 			}
 		}
@@ -323,13 +327,13 @@ var configSetupCmd = &cobra.Command{
 
 		if activePass != "" {
 			if err := utils.SetSecret("postgres_password", activePass); err != nil {
-				return fmt.Errorf("failed storing password in keyring: %w", err)
+				return fmt.Errorf("failed storing password: %w", err)
 			}
 		}
 
 		fmt.Println("\n✔ Configuration successfully saved!")
 		fmt.Println("  - Database URL (without password) saved to config.yaml")
-		fmt.Println("  - Password securely encrypted in OS Credential Manager")
+		fmt.Println("  - Password securely encrypted in OS Keyring / Secure Vault")
 		fmt.Println("  - Remote tables automatically verified and created")
 		fmt.Println("\nYou can now run 'kb sync' to synchronize your knowledge base!")
 		return nil
