@@ -23,8 +23,14 @@ func CreateDailyLog(content string) (*models.DailyLog, error) {
 	id := strings.ReplaceAll(uuid.New().String(), "-", "")
 	now := time.Now()
 
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
 	query := `INSERT INTO daily_logs (id, content, created_at) VALUES (?, ?, ?)`
-	_, err := DB.Exec(query, id, content, now)
+	_, err = tx.Exec(query, id, content, now)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +41,13 @@ func CreateDailyLog(content string) (*models.DailyLog, error) {
 		CreatedAt: now,
 	}
 
-	_ = RecordAudit(nil, "daily_log", id, models.ActionCreated, "created daily log", logEntry)
+	if err := RecordAudit(tx, "daily_log", id, models.ActionCreated, "created daily log", logEntry); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 
 	return logEntry, nil
 }
@@ -51,14 +63,23 @@ func UpdateDailyLog(l *models.DailyLog) error {
 		return fmt.Errorf("daily log content cannot be empty")
 	}
 
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	query := `UPDATE daily_logs SET content = ? WHERE id = ?`
-	_, err = DB.Exec(query, l.Content, fullID)
+	_, err = tx.Exec(query, l.Content, fullID)
 	if err != nil {
 		return err
 	}
 
-	_ = RecordAudit(nil, "daily_log", fullID, models.ActionUpdated, "content updated", l)
-	return nil
+	if err := RecordAudit(tx, "daily_log", fullID, models.ActionUpdated, "content updated", l); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 
@@ -263,14 +284,26 @@ func PromoteDailyLog(logID string, noteType models.NoteType, noteStatus models.S
 		return nil, fmt.Errorf("failed to create note from log: %w", err)
 	}
 
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
 	// Update daily_logs table with note_id reference
 	query := `UPDATE daily_logs SET note_id = ? WHERE id = ?`
-	if _, err := DB.Exec(query, n.ID, l.ID); err != nil {
+	if _, err := tx.Exec(query, n.ID, l.ID); err != nil {
 		return nil, fmt.Errorf("failed to link log to note: %w", err)
 	}
 
 	l.NoteID = n.ID
-	_ = RecordAudit(nil, "daily_log", l.ID, models.ActionPromoted, fmt.Sprintf("promoted to note [%s]", n.ID[:7]), l)
+	if err := RecordAudit(tx, "daily_log", l.ID, models.ActionPromoted, fmt.Sprintf("promoted to note [%s]", n.ID[:7]), l); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 
 	return n, nil
 }
@@ -287,9 +320,15 @@ func SoftDeleteDailyLog(id string, reason string) error {
 
 	l, _ := GetDailyLog(fullID)
 
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	now := time.Now()
 	query := `UPDATE daily_logs SET deleted_at = ?, deleted_note = ? WHERE id = ?`
-	_, err = DB.Exec(query, now, reason, fullID)
+	_, err = tx.Exec(query, now, reason, fullID)
 	if err != nil {
 		return err
 	}
@@ -297,10 +336,12 @@ func SoftDeleteDailyLog(id string, reason string) error {
 	if l != nil {
 		l.DeletedAt = now
 		l.DeletedNote = reason
-		_ = RecordAudit(nil, "daily_log", fullID, models.ActionDeleted, fmt.Sprintf("soft-deleted: %s", reason), l)
+		if err := RecordAudit(tx, "daily_log", fullID, models.ActionDeleted, fmt.Sprintf("soft-deleted: %s", reason), l); err != nil {
+			return err
+		}
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func RestoreDailyLog(id string) (*models.DailyLog, error) {
@@ -314,14 +355,26 @@ func RestoreDailyLog(id string) (*models.DailyLog, error) {
 		return nil, err
 	}
 
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
 	query := `UPDATE daily_logs SET deleted_at = NULL, deleted_note = NULL WHERE id = ?`
-	if _, err := DB.Exec(query, fullID); err != nil {
+	if _, err := tx.Exec(query, fullID); err != nil {
 		return nil, err
 	}
 
 	l.DeletedAt = time.Time{}
 	l.DeletedNote = ""
-	_ = RecordAudit(nil, "daily_log", fullID, models.ActionRestored, "restored daily log", l)
+	if err := RecordAudit(tx, "daily_log", fullID, models.ActionRestored, "restored daily log", l); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 
 	return l, nil
 }

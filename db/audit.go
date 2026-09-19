@@ -267,7 +267,7 @@ func GetAuditEntry(id string) (*models.AuditEntry, error) {
 	return &entry, nil
 }
 
-// RevertNoteToSnapshot restores a note to a previous snapshot state.
+// RevertNoteToSnapshot restores a note to a previous snapshot state in an atomic transaction.
 func RevertNoteToSnapshot(noteID string, snapshotJSON string) (*models.Note, error) {
 	if strings.TrimSpace(snapshotJSON) == "" {
 		return nil, fmt.Errorf("snapshot is empty, cannot revert")
@@ -278,16 +278,57 @@ func RevertNoteToSnapshot(noteID string, snapshotJSON string) (*models.Note, err
 		return nil, fmt.Errorf("failed to decode snapshot JSON: %w", err)
 	}
 
-	snapNote.ID = noteID
+	fullID, err := ResolveID(noteID)
+	if err != nil {
+		return nil, err
+	}
+	snapNote.ID = fullID
 	snapNote.UpdatedAt = time.Now()
 
-	// Update note in database
-	if err := UpdateNote(&snapNote); err != nil {
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	var targetDT sql.NullTime
+	if !snapNote.TargetDateTime.IsZero() {
+		targetDT = sql.NullTime{Time: snapNote.TargetDateTime, Valid: true}
+	}
+
+	query := `UPDATE notes SET 
+		note = ?, 
+		note_flesh = ?, 
+		type = ?, 
+		status = ?, 
+		area = ?, 
+		importance = ?, 
+		clarity = ?, 
+		source = ?, 
+		target_date_time = ?, 
+		updated_at = ?
+	WHERE id = ?`
+
+	if _, err := tx.Exec(query, snapNote.Note, snapNote.NoteFlesh, snapNote.Type, snapNote.Status, snapNote.Area, snapNote.Importance, snapNote.Clarity, snapNote.Source, targetDT, snapNote.UpdatedAt, snapNote.ID); err != nil {
 		return nil, fmt.Errorf("failed restoring note: %w", err)
 	}
 
-	// Record explicit restored action
-	_ = RecordAudit(nil, "note", noteID, models.ActionRestored, fmt.Sprintf("reverted to snapshot %s", snapNote.UpdatedAt.Format("2006-01-02 15:04")), snapNote)
+	// Update FTS table
+	if _, err := tx.Exec(`DELETE FROM notes_fts WHERE note_id = ?`, snapNote.ID); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(`INSERT INTO notes_fts (note_id, note, note_flesh) VALUES (?, ?, ?)`, snapNote.ID, snapNote.Note, snapNote.NoteFlesh); err != nil {
+		return nil, err
+	}
+
+	// Record explicit single restored action
+	if err := RecordAudit(tx, "note", snapNote.ID, models.ActionRestored, fmt.Sprintf("reverted to snapshot %s", snapNote.UpdatedAt.Format("2006-01-02 15:04")), snapNote); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 
 	return &snapNote, nil
 }

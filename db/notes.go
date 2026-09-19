@@ -204,9 +204,15 @@ func SoftDeleteNote(id string, reason string) error {
 
 	n, _ := GetNote(fullID)
 
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	now := time.Now()
 	query := `UPDATE notes SET deleted_at = ?, deleted_note = ?, updated_at = ? WHERE id = ?`
-	_, err = DB.Exec(query, now, reason, now, fullID)
+	_, err = tx.Exec(query, now, reason, now, fullID)
 	if err != nil {
 		return err
 	}
@@ -215,10 +221,12 @@ func SoftDeleteNote(id string, reason string) error {
 		n.DeletedAt = now
 		n.DeletedNote = reason
 		n.UpdatedAt = now
-		_ = RecordAudit(nil, "note", fullID, models.ActionDeleted, fmt.Sprintf("soft-deleted: %s", reason), n)
+		if err := RecordAudit(tx, "note", fullID, models.ActionDeleted, fmt.Sprintf("soft-deleted: %s", reason), n); err != nil {
+			return err
+		}
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func RestoreNote(id string) (*models.Note, error) {
@@ -232,16 +240,28 @@ func RestoreNote(id string) (*models.Note, error) {
 		return nil, err
 	}
 
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
 	now := time.Now()
 	query := `UPDATE notes SET deleted_at = NULL, deleted_note = NULL, updated_at = ? WHERE id = ?`
-	if _, err := DB.Exec(query, now, fullID); err != nil {
+	if _, err := tx.Exec(query, now, fullID); err != nil {
 		return nil, err
 	}
 
 	n.DeletedAt = time.Time{}
 	n.DeletedNote = ""
 	n.UpdatedAt = now
-	_ = RecordAudit(nil, "note", fullID, models.ActionRestored, "restored note", n)
+	if err := RecordAudit(tx, "note", fullID, models.ActionRestored, "restored note", n); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 
 	return n, nil
 }
@@ -307,9 +327,53 @@ func ListNotesExtended(filterType, filterStatus, filterArea string, includeDelet
 	return notes, nil
 }
 
+// SanitizeFTS5Query escapes and formats search tokens into safe SQLite FTS5 expressions.
+func SanitizeFTS5Query(query string) string {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return ""
+	}
+
+	// If query is an explicit phrase enclosed in quotes, sanitize and preserve phrase matching
+	if strings.HasPrefix(query, `"`) && strings.HasSuffix(query, `"`) && len(query) >= 2 {
+		inner := strings.Trim(query, `"`)
+		inner = strings.ReplaceAll(inner, `"`, `""`)
+		if strings.TrimSpace(inner) == "" {
+			return ""
+		}
+		return fmt.Sprintf(`"%s"`, inner)
+	}
+
+	words := strings.Fields(query)
+	if len(words) == 0 {
+		return ""
+	}
+
+	var tokens []string
+	for _, w := range words {
+		escaped := strings.ReplaceAll(w, `"`, `""`)
+		escaped = strings.Trim(escaped, `*^:+-/()`)
+		if escaped == "" {
+			continue
+		}
+		tokens = append(tokens, fmt.Sprintf(`"%s"*`, escaped))
+	}
+
+	if len(tokens) == 0 {
+		return ""
+	}
+	return strings.Join(tokens, " ")
+}
+
 func SearchNotesExtended(searchTerm, filterType, filterStatus, filterArea string) ([]models.Note, error) {
+	sanitizedQuery := SanitizeFTS5Query(searchTerm)
+	if sanitizedQuery == "" {
+		// If search term has no valid alphanumeric tokens, return empty list
+		return []models.Note{}, nil
+	}
+
 	whereClauses := []string{"notes_fts MATCH ?", "n.deleted_at IS NULL"}
-	args := []interface{}{searchTerm}
+	args := []interface{}{sanitizedQuery}
 
 	if filterType != "" {
 		whereClauses = append(whereClauses, "n.type = ?")
