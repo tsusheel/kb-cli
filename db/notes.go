@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -511,4 +513,243 @@ func GetOrphanNotes() ([]models.Note, error) {
 	}
 
 	return notes, nil
+}
+
+type candidateScore struct {
+	note       models.Note
+	score      float64
+	reasons    []string
+	sharedTags []string
+}
+
+// SuggestLinkCandidates analyzes note content, tags, area, and graph topology to propose ranked link candidates.
+func SuggestLinkCandidates(noteID, text string, limit int) ([]models.LinkCandidate, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 20 {
+		limit = 20
+	}
+
+	alreadyLinked := make(map[string]bool)
+	var focalNote *models.Note
+	var focalTags []models.Tag
+
+	if noteID != "" {
+		fullID, err := ResolveID(noteID)
+		if err == nil {
+			alreadyLinked[fullID] = true
+			if n, err := GetNote(fullID); err == nil {
+				focalNote = n
+			}
+			focalTags, _ = GetTagsForNote(fullID)
+			existingLinks, _ := GetLinksForNote(fullID)
+			for _, l := range existingLinks {
+				alreadyLinked[l.FromNote] = true
+				alreadyLinked[l.ToNote] = true
+			}
+		}
+	}
+
+	analysisText := strings.TrimSpace(text)
+	if analysisText == "" && focalNote != nil {
+		analysisText = focalNote.Note + " " + focalNote.NoteFlesh
+	}
+
+	candidateMap := make(map[string]*candidateScore)
+
+	getOrCreateCandidate := func(n models.Note) *candidateScore {
+		if cs, ok := candidateMap[n.ID]; ok {
+			return cs
+		}
+		cs := &candidateScore{
+			note:  n,
+			score: 0.10, // baseline active presence
+		}
+		candidateMap[n.ID] = cs
+		return cs
+	}
+
+	// 1. FTS5 Lexical Search with extracted keywords
+	if analysisText != "" {
+		keywords := extractKeywords(analysisText, 8)
+		if keywords != "" {
+			matchedNotes, err := SearchNotes(keywords)
+			if err == nil {
+				for rankIdx, mn := range matchedNotes {
+					if alreadyLinked[mn.ID] {
+						continue
+					}
+					cs := getOrCreateCandidate(mn)
+					rankBoost := 0.40 - float64(rankIdx)*0.03
+					if rankBoost < 0.15 {
+						rankBoost = 0.15
+					}
+					cs.score += rankBoost
+					cs.reasons = append(cs.reasons, "matched keywords in content")
+				}
+			}
+		}
+	}
+
+	// 2. Tag overlap signal
+	if len(focalTags) > 0 {
+		for _, ft := range focalTags {
+			query := `
+				SELECT ` + prefixedNoteColumns("n") + `
+				FROM note_tags nt
+				JOIN tags t ON nt.tag_id = t.id
+				JOIN notes n ON nt.note_id = n.id AND n.deleted_at IS NULL
+				WHERE t.name = ?
+			`
+			rows, err := DB.Query(query, ft.Name)
+			if err == nil {
+				for rows.Next() {
+					n, err := scanNote(rows)
+					if err == nil && !alreadyLinked[n.ID] {
+						cs := getOrCreateCandidate(*n)
+						cs.score += 0.30
+						cs.sharedTags = append(cs.sharedTags, ft.Name)
+						cs.reasons = append(cs.reasons, fmt.Sprintf("shares tag #%s", ft.Name))
+					}
+				}
+				rows.Close()
+			}
+		}
+	}
+
+	// 3. Same Area boost
+	if focalNote != nil && focalNote.Area != "" {
+		areaNotes, err := ListNotesExtended("", "", string(focalNote.Area), false)
+		if err == nil {
+			for _, an := range areaNotes {
+				if !alreadyLinked[an.ID] {
+					if cs, exists := candidateMap[an.ID]; exists {
+						cs.score += 0.15
+						cs.reasons = append(cs.reasons, fmt.Sprintf("in same area '%s'", focalNote.Area))
+					}
+				}
+			}
+		}
+	}
+
+	// 4. Hub Note Centrality signal
+	stats, err := GetKnowledgeBaseStats()
+	if err == nil {
+		for _, hn := range stats.TopHubNotes {
+			if !alreadyLinked[hn.ID] {
+				if cs, exists := candidateMap[hn.ID]; exists {
+					cs.score += 0.10
+					cs.reasons = append(cs.reasons, "frequently referenced hub note")
+				}
+			}
+		}
+	}
+
+	// If candidateMap is still small/empty and we have analysis text, backfill with recent active notes
+	if len(candidateMap) == 0 {
+		recentNotes, _ := ListNotesExtended("", "", "", false)
+		for _, rn := range recentNotes {
+			if !alreadyLinked[rn.ID] {
+				cs := getOrCreateCandidate(rn)
+				cs.reasons = append(cs.reasons, "recent active note")
+				if len(candidateMap) >= limit {
+					break
+				}
+			}
+		}
+	}
+
+	// Format results
+	var candidates []models.LinkCandidate
+	for _, cs := range candidateMap {
+		score := cs.score
+		if score > 0.99 {
+			score = 0.99
+		}
+		if score < 0.10 {
+			score = 0.10
+		}
+		score = math.Round(score*100) / 100
+
+		shortID := cs.note.ID
+		if len(shortID) > 7 {
+			shortID = shortID[:7]
+		}
+
+		// Suggest appropriate relation type
+		suggestedType := models.RelatedTo
+		if focalNote != nil {
+			if focalNote.Type == models.Todo && cs.note.Type == models.Project {
+				suggestedType = models.PartOf
+			} else if focalNote.Type == models.Project && cs.note.Type == models.Todo {
+				suggestedType = models.PartOf
+			} else if focalNote.Type == models.Decision || cs.note.Type == models.Decision {
+				suggestedType = models.Supports
+			}
+		}
+
+		uniqueReasons := deduplicateStrings(cs.reasons)
+		reasonText := strings.Join(uniqueReasons, "; ")
+		if reasonText == "" {
+			reasonText = "relevant topic association"
+		}
+
+		candidates = append(candidates, models.LinkCandidate{
+			TargetID:          cs.note.ID,
+			TargetShortID:     shortID,
+			TargetTitle:       cs.note.Note,
+			TargetType:        cs.note.Type,
+			TargetArea:        cs.note.Area,
+			SharedTags:        deduplicateStrings(cs.sharedTags),
+			SuggestedRelation: suggestedType,
+			ConfidenceScore:   score,
+			MatchReason:       reasonText,
+		})
+	}
+
+	// Sort by confidence score descending
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].ConfidenceScore > candidates[j].ConfidenceScore
+	})
+
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+
+	return candidates, nil
+}
+
+func extractKeywords(text string, maxWords int) string {
+	words := strings.Fields(text)
+	var filtered []string
+	stopwords := map[string]bool{
+		"the": true, "and": true, "for": true, "with": true, "this": true,
+		"that": true, "from": true, "have": true, "what": true, "about": true,
+		"http": true, "https": true, "true": true, "false": true, "null": true,
+		"note": true, "task": true, "todo": true, "will": true, "been": true,
+		"when": true, "where": true, "which": true, "there": true, "their": true,
+	}
+	for _, w := range words {
+		cleaned := strings.ToLower(strings.Trim(w, `.,!?:;'"()[]{}<>-/*#`))
+		if len(cleaned) >= 3 && !stopwords[cleaned] {
+			filtered = append(filtered, cleaned)
+			if len(filtered) >= maxWords {
+				break
+			}
+		}
+	}
+	return strings.Join(filtered, " ")
+}
+
+func deduplicateStrings(items []string) []string {
+	seen := make(map[string]bool)
+	var result []string
+	for _, item := range items {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+	return result
 }

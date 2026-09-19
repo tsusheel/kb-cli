@@ -183,3 +183,21 @@ func calculateStreak() int {
 
 	return streak
 }
+
+// GetKnowledgeMap returns a lightweight bird's-eye topology of the knowledge base.
+func GetKnowledgeMap() (*models.KnowledgeMap, error) {
+	stats, err := GetKnowledgeBaseStats()
+	if err != nil {
+		return nil, err
+	}
+	return &models.KnowledgeMap{
+		TotalActiveNotes:  stats.TotalActiveNotes,
+		TotalDailyLogs:    stats.TotalDailyLogs,
+		NotesByArea:       stats.NotesByArea,
+		NotesByType:       stats.NotesByType,
+		NotesByStatus:     stats.NotesByStatus,
+		TopTags:           stats.TopTags,
+		TopHubNotes:       stats.TopHubNotes,
+		ConsecutiveStreak: stats.ConsecutiveStreak,
+	}, nil
+}

@@ -35,11 +35,13 @@ func StartServer() error {
 func registerTools(s *server.MCPServer) {
 	// 1. list_notes
 	listNotesTool := mcp.NewTool("list_notes",
-		mcp.WithDescription("List notes with optional filters (by type, status, or area). Returns note summaries."),
+		mcp.WithDescription("List notes with optional filters (by type, status, or area). Returns compact note summaries by default to conserve context tokens."),
 		mcp.WithString("type", mcp.Description("Optional note type (e.g., 'todo', 'note', 'project', 'idea', 'decision')")),
 		mcp.WithString("status", mcp.Description("Optional status (e.g., 'active', 'raw', 'refined', 'in-progress', 'completed', 'archived')")),
 		mcp.WithString("area", mcp.Description("Optional area (e.g., 'work', 'finance', 'personal')")),
 		mcp.WithBoolean("include_deleted", mcp.Description("Whether to include soft-deleted notes (default false)")),
+		mcp.WithNumber("limit", mcp.Description("Maximum number of notes to return (default 30, max 100)")),
+		mcp.WithBoolean("compact", mcp.Description("Whether to return compact summaries with preview snippets (default true)")),
 	)
 	s.AddTool(listNotesTool, handleListNotes)
 
@@ -52,8 +54,10 @@ func registerTools(s *server.MCPServer) {
 
 	// 3. search_notes
 	searchNotesTool := mcp.NewTool("search_notes",
-		mcp.WithDescription("Full-text search across note titles and content using SQLite FTS5."),
+		mcp.WithDescription("Full-text search across note titles and content using SQLite FTS5. Returns compact results by default to conserve context tokens."),
 		mcp.WithString("query", mcp.Required(), mcp.Description("Search terms or keywords")),
+		mcp.WithNumber("limit", mcp.Description("Maximum number of search results to return (default 20, max 50)")),
+		mcp.WithBoolean("compact", mcp.Description("Whether to return compact summaries with preview snippets (default true)")),
 	)
 	s.AddTool(searchNotesTool, handleSearchNotes)
 
@@ -158,7 +162,9 @@ func registerTools(s *server.MCPServer) {
 
 	// 14. get_inbox
 	getInboxTool := mcp.NewTool("get_inbox",
-		mcp.WithDescription("Get all raw unrefined notes and unpromoted daily logs awaiting triage."),
+		mcp.WithDescription("Get raw unrefined notes and unpromoted daily logs awaiting triage. Returns compact previews by default to conserve context tokens."),
+		mcp.WithNumber("limit", mcp.Description("Maximum number of items per category to return (default 20)")),
+		mcp.WithBoolean("compact", mcp.Description("Whether to return compact previews (default true)")),
 	)
 	s.AddTool(getInboxTool, handleGetInbox)
 
@@ -191,6 +197,36 @@ func registerTools(s *server.MCPServer) {
 		mcp.WithString("id", mcp.Required(), mcp.Description("Full UUID or short ID of daily log to restore")),
 	)
 	s.AddTool(restoreLogTool, handleRestoreLog)
+
+	// 19. get_knowledge_map
+	getKnowledgeMapTool := mcp.NewTool("get_knowledge_map",
+		mcp.WithDescription("Get a high-level bird's-eye topology of the knowledge base (~100-150 tokens) with note counts by area, type, status, top tags, top hub notes, and active streak."),
+	)
+	s.AddTool(getKnowledgeMapTool, handleGetKnowledgeMap)
+
+	// 20. get_graph_neighborhood
+	getGraphNeighborhoodTool := mcp.NewTool("get_graph_neighborhood",
+		mcp.WithDescription("Retrieve the bounded graph neighborhood around a focal note, including 1-hop incoming/outgoing relations with neighbor titles and shared tag clusters."),
+		mcp.WithString("id", mcp.Required(), mcp.Description("Full UUID or short ID prefix of the focal note")),
+	)
+	s.AddTool(getGraphNeighborhoodTool, handleGetGraphNeighborhood)
+
+	// 21. suggest_links
+	suggestLinksTool := mcp.NewTool("suggest_links",
+		mcp.WithDescription("Intelligently analyze a note or draft text and suggest relevant candidate notes to link against, ranked with confidence scores and explainable match reasons."),
+		mcp.WithString("note_id", mcp.Description("Optional existing note ID to suggest links for")),
+		mcp.WithString("text", mcp.Description("Optional text or draft content to analyze against the knowledge base")),
+		mcp.WithNumber("limit", mcp.Description("Maximum number of candidate links to suggest (default 5)")),
+	)
+	s.AddTool(suggestLinksTool, handleSuggestLinks)
+
+	// 22. get_orphans
+	getOrphansTool := mcp.NewTool("get_orphans",
+		mcp.WithDescription("Find active notes that are untagged and have no incoming or outgoing links, useful for triaging and building knowledge connections."),
+		mcp.WithNumber("limit", mcp.Description("Maximum number of orphan notes to return (default 20)")),
+		mcp.WithBoolean("compact", mcp.Description("Whether to return compact summaries with preview snippets (default true)")),
+	)
+	s.AddTool(getOrphansTool, handleGetOrphans)
 }
 
 func registerResources(s *server.MCPServer) {
@@ -267,11 +303,20 @@ func handlePromptTriageInbox(ctx context.Context, req mcp.GetPromptRequest) (*mc
 	unpromotedLogs, _ := db.GetUnpromotedDailyLogs()
 
 	promptText := fmt.Sprintf("Please review the following %d raw note(s) and %d unpromoted daily log(s):\n\n", len(rawNotes), len(unpromotedLogs))
-	for _, n := range rawNotes {
-		promptText += fmt.Sprintf("- Note [%s]: %s (flesh: %s)\n", utils.ShortID(n.ID), n.Note, n.NoteFlesh)
+	for i, n := range rawNotes {
+		if i >= 20 {
+			promptText += fmt.Sprintf("... and %d more raw notes\n", len(rawNotes)-20)
+			break
+		}
+		flesh := truncateSnippet(n.NoteFlesh, 120)
+		promptText += fmt.Sprintf("- Note [%s]: %s (flesh: %s)\n", utils.ShortID(n.ID), n.Note, flesh)
 	}
-	for _, l := range unpromotedLogs {
-		promptText += fmt.Sprintf("- Daily Log [%s]: %s\n", utils.ShortID(l.ID), l.Content)
+	for i, l := range unpromotedLogs {
+		if i >= 20 {
+			promptText += fmt.Sprintf("... and %d more daily logs\n", len(unpromotedLogs)-20)
+			break
+		}
+		promptText += fmt.Sprintf("- Daily Log [%s]: %s\n", utils.ShortID(l.ID), truncateSnippet(l.Content, 120))
 	}
 	promptText += "\nPropose appropriate note types (todo, project, idea, concept, decision), tags, and suggest which logs should be promoted to notes."
 
@@ -318,6 +363,14 @@ func handleListNotes(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToo
 	status := req.GetString("status", "")
 	area := req.GetString("area", "")
 	includeDeleted := req.GetBool("include_deleted", false)
+	limit := req.GetInt("limit", 30)
+	if limit <= 0 {
+		limit = 30
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	compact := req.GetBool("compact", true)
 
 	notes, err := db.ListNotesExtended(noteType, status, area, includeDeleted)
 	if err != nil {
@@ -328,6 +381,7 @@ func handleListNotes(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToo
 		ID             string     `json:"id"`
 		ShortID        string     `json:"short_id"`
 		Note           string     `json:"note"`
+		FleshPreview   string     `json:"flesh_preview,omitempty"`
 		Type           string     `json:"type"`
 		Status         string     `json:"status"`
 		Area           string     `json:"area,omitempty"`
@@ -338,7 +392,10 @@ func handleListNotes(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToo
 	}
 
 	var summaries []NoteSummary
-	for _, n := range notes {
+	for i, n := range notes {
+		if i >= limit {
+			break
+		}
 		shortID := n.ID
 		if len(shortID) > 7 {
 			shortID = shortID[:7]
@@ -351,6 +408,11 @@ func handleListNotes(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToo
 			Status:    string(n.Status),
 			Area:      string(n.Area),
 			UpdatedAt: n.UpdatedAt,
+		}
+		if compact && n.NoteFlesh != "" {
+			ns.FleshPreview = truncateSnippet(n.NoteFlesh, 120)
+		} else if !compact && n.NoteFlesh != "" {
+			ns.FleshPreview = n.NoteFlesh
 		}
 		if !n.TargetDateTime.IsZero() {
 			ns.TargetDateTime = &n.TargetDateTime
@@ -456,6 +518,15 @@ func handleSearchNotes(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	limit := req.GetInt("limit", 20)
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	compact := req.GetBool("compact", true)
+
 	notes, err := db.SearchNotes(query)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("search failed: %v", err)), nil
@@ -465,6 +536,7 @@ func handleSearchNotes(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 		ID             string     `json:"id"`
 		ShortID        string     `json:"short_id"`
 		Note           string     `json:"note"`
+		Snippet        string     `json:"snippet,omitempty"`
 		Type           string     `json:"type"`
 		Status         string     `json:"status"`
 		Area           string     `json:"area,omitempty"`
@@ -473,7 +545,10 @@ func handleSearchNotes(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	}
 
 	var results []SearchResult
-	for _, n := range notes {
+	for i, n := range notes {
+		if i >= limit {
+			break
+		}
 		shortID := n.ID
 		if len(shortID) > 7 {
 			shortID = shortID[:7]
@@ -486,6 +561,11 @@ func handleSearchNotes(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 			Status:    string(n.Status),
 			Area:      string(n.Area),
 			UpdatedAt: n.UpdatedAt,
+		}
+		if compact && n.NoteFlesh != "" {
+			sr.Snippet = truncateSnippet(n.NoteFlesh, 120)
+		} else if !compact && n.NoteFlesh != "" {
+			sr.Snippet = n.NoteFlesh
 		}
 		if !n.TargetDateTime.IsZero() {
 			sr.TargetDateTime = &n.TargetDateTime
@@ -859,6 +939,15 @@ func handlePromoteLog(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallTo
 }
 
 func handleGetInbox(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	limit := req.GetInt("limit", 20)
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	compact := req.GetBool("compact", true)
+
 	rawNotes, err := db.ListNotesExtended("", string(models.Raw), "", false)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to get raw notes: %v", err)), nil
@@ -870,46 +959,67 @@ func handleGetInbox(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallTool
 	}
 
 	type NoteItem struct {
-		ID        string    `json:"id"`
-		ShortID   string    `json:"short_id"`
-		Note      string    `json:"note"`
-		Type      string    `json:"type"`
-		UpdatedAt time.Time `json:"updated_at"`
+		ID           string    `json:"id"`
+		ShortID      string    `json:"short_id"`
+		Note         string    `json:"note"`
+		FleshPreview string    `json:"flesh_preview,omitempty"`
+		Type         string    `json:"type"`
+		UpdatedAt    time.Time `json:"updated_at"`
 	}
 
 	type LogItem struct {
-		ID        string    `json:"id"`
-		ShortID   string    `json:"short_id"`
-		Content   string    `json:"content"`
-		CreatedAt time.Time `json:"created_at"`
+		ID             string    `json:"id"`
+		ShortID        string    `json:"short_id"`
+		ContentPreview string    `json:"content_preview"`
+		CreatedAt      time.Time `json:"created_at"`
 	}
 
-	var notesList []NoteItem
-	for _, n := range rawNotes {
-		notesList = append(notesList, NoteItem{
+	notesList := make([]NoteItem, 0)
+	for i, n := range rawNotes {
+		if i >= limit {
+			break
+		}
+		item := NoteItem{
 			ID:        n.ID,
 			ShortID:   n.ID[:7],
 			Note:      n.Note,
 			Type:      string(n.Type),
 			UpdatedAt: n.UpdatedAt,
-		})
+		}
+		if compact && n.NoteFlesh != "" {
+			item.FleshPreview = truncateSnippet(n.NoteFlesh, 120)
+		} else if !compact && n.NoteFlesh != "" {
+			item.FleshPreview = n.NoteFlesh
+		}
+		notesList = append(notesList, item)
 	}
 
-	var logsList []LogItem
-	for _, l := range unpromotedLogs {
+	logsList := make([]LogItem, 0)
+	for i, l := range unpromotedLogs {
+		if i >= limit {
+			break
+		}
+		logContent := l.Content
+		if compact {
+			logContent = truncateSnippet(l.Content, 120)
+		}
 		logsList = append(logsList, LogItem{
-			ID:        l.ID,
-			ShortID:   l.ID[:7],
-			Content:   l.Content,
-			CreatedAt: l.CreatedAt,
+			ID:             l.ID,
+			ShortID:        l.ID[:7],
+			ContentPreview: logContent,
+			CreatedAt:      l.CreatedAt,
 		})
 	}
 
 	res := map[string]interface{}{
-		"raw_notes_count": len(notesList),
-		"raw_notes":       notesList,
-		"logs_count":      len(logsList),
-		"unpromoted_logs": logsList,
+		"raw_notes_count":       len(rawNotes),
+		"total_raw_notes":       len(rawNotes),
+		"returned_raw_notes":    len(notesList),
+		"raw_notes":             notesList,
+		"logs_count":            len(unpromotedLogs),
+		"total_unpromoted_logs": len(unpromotedLogs),
+		"returned_logs":         len(logsList),
+		"unpromoted_logs":       logsList,
 	}
 
 	data, _ := json.MarshalIndent(res, "", "  ")
@@ -1064,4 +1174,137 @@ func handleRestoreLog(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallTo
 	}
 	data, _ := json.MarshalIndent(res, "", "  ")
 	return mcp.NewToolResultText(string(data)), nil
+}
+
+func handleGetKnowledgeMap(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	kmap, err := db.GetKnowledgeMap()
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get knowledge map: %v", err)), nil
+	}
+	data, err := json.MarshalIndent(kmap, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to serialize knowledge map: %v", err)), nil
+	}
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func handleGetGraphNeighborhood(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id, err := req.RequireString("id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	neighborhood, err := db.GetGraphNeighborhood(id)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get graph neighborhood: %v", err)), nil
+	}
+
+	data, err := json.MarshalIndent(neighborhood, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to serialize graph neighborhood: %v", err)), nil
+	}
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func handleSuggestLinks(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	noteID := req.GetString("note_id", "")
+	text := req.GetString("text", "")
+	limit := req.GetInt("limit", 5)
+
+	candidates, err := db.SuggestLinkCandidates(noteID, text, limit)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to suggest links: %v", err)), nil
+	}
+
+	res := map[string]interface{}{
+		"query_note_id":   noteID,
+		"candidate_count": len(candidates),
+		"candidates":      candidates,
+	}
+
+	data, err := json.MarshalIndent(res, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to serialize candidates: %v", err)), nil
+	}
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func handleGetOrphans(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	limit := req.GetInt("limit", 20)
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	compact := req.GetBool("compact", true)
+
+	orphans, err := db.GetOrphanNotes()
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to get orphans: %v", err)), nil
+	}
+
+	type OrphanItem struct {
+		ID             string     `json:"id"`
+		ShortID        string     `json:"short_id"`
+		Note           string     `json:"note"`
+		FleshPreview   string     `json:"flesh_preview,omitempty"`
+		Type           string     `json:"type"`
+		Status         string     `json:"status"`
+		Area           string     `json:"area,omitempty"`
+		TargetDateTime *time.Time `json:"target_date_time,omitempty"`
+		UpdatedAt      time.Time  `json:"updated_at"`
+	}
+
+	list := make([]OrphanItem, 0)
+	for i, n := range orphans {
+		if i >= limit {
+			break
+		}
+		shortID := n.ID
+		if len(shortID) > 7 {
+			shortID = shortID[:7]
+		}
+		item := OrphanItem{
+			ID:        n.ID,
+			ShortID:   shortID,
+			Note:      n.Note,
+			Type:      string(n.Type),
+			Status:    string(n.Status),
+			Area:      string(n.Area),
+			UpdatedAt: n.UpdatedAt,
+		}
+		if compact && n.NoteFlesh != "" {
+			item.FleshPreview = truncateSnippet(n.NoteFlesh, 120)
+		} else if !compact && n.NoteFlesh != "" {
+			item.FleshPreview = n.NoteFlesh
+		}
+		if !n.TargetDateTime.IsZero() {
+			item.TargetDateTime = &n.TargetDateTime
+		}
+		list = append(list, item)
+	}
+
+	res := map[string]interface{}{
+		"total_orphans": len(orphans),
+		"returned":      len(list),
+		"orphans":       list,
+	}
+
+	data, err := json.MarshalIndent(res, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to serialize orphans: %v", err)), nil
+	}
+	return mcp.NewToolResultText(string(data)), nil
+}
+
+func truncateSnippet(s string, maxLen int) string {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\t", " ")
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

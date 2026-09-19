@@ -393,3 +393,137 @@ func TestMCPResourcesAndPrompts(t *testing.T) {
 		t.Errorf("unexpected daily summary prompt: %v", summaryPrompt)
 	}
 }
+
+func TestMCPContextEngineeringTools(t *testing.T) {
+	setupMCPTestDB(t)
+	ctx := context.Background()
+
+	// 1. Seed notes with tags, areas, and links
+	res1, _ := handleCreateNote(ctx, makeToolRequest("create_note", map[string]interface{}{
+		"note":    "Distributed Tracing Architecture",
+		"content": "Comprehensive OpenTelemetry implementation guide across microservices.",
+		"type":    "project",
+		"area":    "work",
+		"status":  "active",
+	}))
+	var n1 map[string]interface{}
+	json.Unmarshal([]byte(res1.Content[0].(mcp.TextContent).Text), &n1)
+	id1 := n1["id"].(string)
+
+	res2, _ := handleCreateNote(ctx, makeToolRequest("create_note", map[string]interface{}{
+		"note":    "Implement OTel Collector",
+		"content": "Deploy OTel collector with Jaeger exporter.",
+		"type":    "todo",
+		"area":    "work",
+		"status":  "raw",
+	}))
+	var n2 map[string]interface{}
+	json.Unmarshal([]byte(res2.Content[0].(mcp.TextContent).Text), &n2)
+	id2 := n2["id"].(string)
+
+	res3, _ := handleCreateNote(ctx, makeToolRequest("create_note", map[string]interface{}{
+		"note":    "Solitary Untagged Note",
+		"content": "This note has no tags and no links whatsoever.",
+		"type":    "idea",
+		"status":  "active",
+	}))
+	var n3 map[string]interface{}
+	json.Unmarshal([]byte(res3.Content[0].(mcp.TextContent).Text), &n3)
+	id3 := n3["id"].(string)
+
+	// Add tags
+	handleAddTag(ctx, makeToolRequest("add_tag", map[string]interface{}{"note_id": id1, "tag": "observability"}))
+	handleAddTag(ctx, makeToolRequest("add_tag", map[string]interface{}{"note_id": id1, "tag": "golang"}))
+	handleAddTag(ctx, makeToolRequest("add_tag", map[string]interface{}{"note_id": id2, "tag": "observability"}))
+
+	// Add link
+	handleLinkNotes(ctx, makeToolRequest("link_notes", map[string]interface{}{
+		"from_id": id2,
+		"to_id":   id1,
+		"type":    "part_of",
+	}))
+
+	// 2. Test get_knowledge_map
+	kmapRes, err := handleGetKnowledgeMap(ctx, makeToolRequest("get_knowledge_map", map[string]interface{}{}))
+	if err != nil {
+		t.Fatalf("handleGetKnowledgeMap failed: %v", err)
+	}
+	kmapText := kmapRes.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(kmapText, "total_active_notes") || !strings.Contains(kmapText, "observability") {
+		t.Errorf("unexpected knowledge map output: %s", kmapText)
+	}
+
+	// 3. Test get_graph_neighborhood
+	gnRes, err := handleGetGraphNeighborhood(ctx, makeToolRequest("get_graph_neighborhood", map[string]interface{}{
+		"id": id1,
+	}))
+	if err != nil {
+		t.Fatalf("handleGetGraphNeighborhood failed: %v", err)
+	}
+	gnText := gnRes.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(gnText, "focal_note") || !strings.Contains(gnText, "Implement OTel Collector") || !strings.Contains(gnText, "part_of") {
+		t.Errorf("unexpected graph neighborhood output: %s", gnText)
+	}
+
+	// 4. Test suggest_links
+	suggestRes, err := handleSuggestLinks(ctx, makeToolRequest("suggest_links", map[string]interface{}{
+		"note_id": id3,
+		"text":    "Need tracing and observability collector setup",
+		"limit":   float64(5),
+	}))
+	if err != nil {
+		t.Fatalf("handleSuggestLinks failed: %v", err)
+	}
+	suggestText := suggestRes.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(suggestText, "candidates") || !strings.Contains(suggestText, "confidence_score") {
+		t.Errorf("unexpected suggest links output: %s", suggestText)
+	}
+
+	// 5. Test get_orphans
+	orphansRes, err := handleGetOrphans(ctx, makeToolRequest("get_orphans", map[string]interface{}{
+		"compact": true,
+	}))
+	if err != nil {
+		t.Fatalf("handleGetOrphans failed: %v", err)
+	}
+	orphansText := orphansRes.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(orphansText, "Solitary Untagged Note") {
+		t.Errorf("expected orphan note in get_orphans: %s", orphansText)
+	}
+
+	// 6. Test Compact mode previews in list_notes and search_notes
+	listRes, err := handleListNotes(ctx, makeToolRequest("list_notes", map[string]interface{}{
+		"compact": true,
+	}))
+	if err != nil {
+		t.Fatalf("handleListNotes failed: %v", err)
+	}
+	listText := listRes.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(listText, "flesh_preview") {
+		t.Errorf("expected flesh_preview in compact list_notes: %s", listText)
+	}
+
+	searchRes, err := handleSearchNotes(ctx, makeToolRequest("search_notes", map[string]interface{}{
+		"query":   "OpenTelemetry",
+		"compact": true,
+	}))
+	if err != nil {
+		t.Fatalf("handleSearchNotes failed: %v", err)
+	}
+	searchText := searchRes.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(searchText, "snippet") {
+		t.Errorf("expected snippet in compact search_notes: %s", searchText)
+	}
+
+	// 7. Test get_inbox compact previews
+	inboxRes, err := handleGetInbox(ctx, makeToolRequest("get_inbox", map[string]interface{}{
+		"compact": true,
+	}))
+	if err != nil {
+		t.Fatalf("handleGetInbox failed: %v", err)
+	}
+	inboxText := inboxRes.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(inboxText, "flesh_preview") {
+		t.Errorf("expected flesh_preview in compact get_inbox: %s", inboxText)
+	}
+}

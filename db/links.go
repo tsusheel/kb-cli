@@ -196,3 +196,103 @@ func GetAllActiveLinks() ([]models.Link, error) {
 
 	return links, nil
 }
+
+// GetGraphNeighborhood returns the focal note, 1-hop incoming and outgoing relations with titles and types, and shared tag clusters.
+func GetGraphNeighborhood(noteID string) (*models.GraphNeighborhood, error) {
+	fullNoteID, err := ResolveID(noteID)
+	if err != nil {
+		return nil, err
+	}
+
+	focalNote, err := GetNote(fullNoteID)
+	if err != nil {
+		return nil, err
+	}
+
+	focalTags, _ := GetTagsForNote(fullNoteID)
+	var focalTagNames []string
+	for _, t := range focalTags {
+		focalTagNames = append(focalTagNames, t.Name)
+	}
+
+	// 1-hop relations (incoming & outgoing)
+	relQuery := `
+		SELECT 
+			l.id, 
+			'outgoing' AS direction,
+			l.type, 
+			n.id, 
+			n.note, 
+			n.type
+		FROM links l
+		JOIN notes n ON l.to_note = n.id
+		WHERE l.from_note = ? AND l.deleted_at IS NULL AND n.deleted_at IS NULL
+
+		UNION ALL
+
+		SELECT 
+			l.id, 
+			'incoming' AS direction,
+			l.type, 
+			n.id, 
+			n.note, 
+			n.type
+		FROM links l
+		JOIN notes n ON l.from_note = n.id
+		WHERE l.to_note = ? AND l.deleted_at IS NULL AND n.deleted_at IS NULL
+	`
+	rows, err := DB.Query(relQuery, fullNoteID, fullNoteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var relations []models.GraphRelation
+	for rows.Next() {
+		var r models.GraphRelation
+		var relTypeStr, noteTypeStr string
+		if err := rows.Scan(&r.ID, &r.Direction, &relTypeStr, &r.ConnectedNoteID, &r.ConnectedNoteTitle, &noteTypeStr); err == nil {
+			r.RelationType = models.LinkType(relTypeStr)
+			r.ConnectedNoteType = models.NoteType(noteTypeStr)
+			r.ConnectedShortID = r.ConnectedNoteID
+			if len(r.ConnectedShortID) > 7 {
+				r.ConnectedShortID = r.ConnectedShortID[:7]
+			}
+			relations = append(relations, r)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Shared tag clusters
+	clusterQuery := `
+		SELECT t.name, COUNT(DISTINCT nt2.note_id) as cnt
+		FROM note_tags nt1
+		JOIN tags t ON nt1.tag_id = t.id
+		JOIN note_tags nt2 ON nt1.tag_id = nt2.tag_id AND nt2.note_id != ?
+		JOIN notes n ON nt2.note_id = n.id AND n.deleted_at IS NULL
+		WHERE nt1.note_id = ?
+		GROUP BY t.id, t.name
+		ORDER BY cnt DESC
+	`
+	var clusters []models.TagCluster
+	clusterRows, err := DB.Query(clusterQuery, fullNoteID, fullNoteID)
+	if err == nil {
+		defer clusterRows.Close()
+		for clusterRows.Next() {
+			var tc models.TagCluster
+			if err := clusterRows.Scan(&tc.TagName, &tc.NoteCount); err == nil {
+				clusters = append(clusters, tc)
+			}
+		}
+		_ = clusterRows.Err()
+	}
+
+	return &models.GraphNeighborhood{
+		FocalNote:         focalNote,
+		FocalTags:         focalTagNames,
+		Relations:         relations,
+		SharedTagClusters: clusters,
+	}, nil
+}
