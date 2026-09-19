@@ -1,0 +1,337 @@
+package cmd
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/ktr0731/go-fuzzyfinder"
+	"github.com/tsusheel/kb-cli/db"
+	"github.com/tsusheel/kb-cli/utils"
+)
+
+// CLIItem represents a selectable note or daily log in fuzzy finders
+type CLIItem struct {
+	ID            string
+	Type          string
+	Status        string
+	Area          string
+	Display       string
+	Flesh         string
+	Tags          []string
+	Timestamp     string
+	IsLog         bool
+	DeletedReason string
+}
+
+// FormatFuzzy returns standardized fuzzy-finder string: [id] [date] (type:status) [area] [#tags]  title — flesh
+func (item CLIItem) FormatFuzzy() string {
+	shortID := utils.ShortID(item.ID)
+	typeStr := item.Type
+	if item.Status != "" && !item.IsLog {
+		typeStr = fmt.Sprintf("%s:%s", item.Type, item.Status)
+	}
+
+	var meta []string
+	if item.Area != "" {
+		meta = append(meta, string(item.Area))
+	}
+	if len(item.Tags) > 0 {
+		meta = append(meta, "#"+strings.Join(item.Tags, " #"))
+	}
+	metaStr := ""
+	if len(meta) > 0 {
+		metaStr = " [" + strings.Join(meta, " ") + "]"
+	}
+
+	fleshSnippet := ""
+	if item.Flesh != "" {
+		cleanedFlesh := strings.ReplaceAll(item.Flesh, "\r\n", " ")
+		cleanedFlesh = strings.ReplaceAll(cleanedFlesh, "\n", " ")
+		cleanedFlesh = strings.ReplaceAll(cleanedFlesh, "\t", " ")
+		cleanedFlesh = strings.TrimSpace(cleanedFlesh)
+		if len(cleanedFlesh) > 0 {
+			fleshSnippet = " — " + cleanedFlesh
+		}
+	}
+
+	return fmt.Sprintf("[%s] [%s] (%-10s)%s  %s%s", shortID, item.Timestamp, typeStr, metaStr, item.Display, fleshSnippet)
+}
+
+// wrapText wraps text to a maximum column width at word boundaries.
+func wrapText(text string, width int) string {
+	if width <= 0 {
+		width = 80
+	}
+	if width < 10 {
+		width = 10
+	}
+
+	lines := strings.Split(text, "\n")
+	var wrappedLines []string
+
+	for _, line := range lines {
+		line = strings.TrimRight(line, "\r")
+		if len(line) <= width {
+			wrappedLines = append(wrappedLines, line)
+			continue
+		}
+
+		words := strings.Fields(line)
+		if len(words) == 0 {
+			wrappedLines = append(wrappedLines, "")
+			continue
+		}
+
+		var currentLine strings.Builder
+		currentLen := 0
+
+		for _, word := range words {
+			wordLen := len(word)
+			if currentLen == 0 {
+				if wordLen > width {
+					for len(word) > width {
+						wrappedLines = append(wrappedLines, word[:width])
+						word = word[width:]
+					}
+					if len(word) > 0 {
+						currentLine.WriteString(word)
+						currentLen = len(word)
+					}
+				} else {
+					currentLine.WriteString(word)
+					currentLen = wordLen
+				}
+			} else {
+				if currentLen+1+wordLen <= width {
+					currentLine.WriteString(" ")
+					currentLine.WriteString(word)
+					currentLen += 1 + wordLen
+				} else {
+					wrappedLines = append(wrappedLines, currentLine.String())
+					currentLine.Reset()
+					currentLen = 0
+
+					if wordLen > width {
+						for len(word) > width {
+							wrappedLines = append(wrappedLines, word[:width])
+							word = word[width:]
+						}
+						if len(word) > 0 {
+							currentLine.WriteString(word)
+							currentLen = len(word)
+						}
+					} else {
+						currentLine.WriteString(word)
+						currentLen = wordLen
+					}
+				}
+			}
+		}
+		if currentLine.Len() > 0 {
+			wrappedLines = append(wrappedLines, currentLine.String())
+		}
+	}
+
+	return strings.Join(wrappedLines, "\n")
+}
+
+// RenderPreview generates formatted terminal text for the fuzzy-finder preview pane with word wrapping.
+func (item CLIItem) RenderPreview(totalWidth int) string {
+	if totalWidth <= 0 {
+		totalWidth = 80
+	}
+	// In go-fuzzyfinder, the preview pane occupies the right half of the terminal: [width/2 .. width-1]
+	// The maximum usable text width inside the preview pane is (totalWidth / 2) - 5
+	previewWidth := (totalWidth / 2) - 5
+	if previewWidth < 15 {
+		previewWidth = 15
+	}
+
+	var b strings.Builder
+	if item.IsLog {
+		b.WriteString(fmt.Sprintf("=== DAILY LOG [%s] ===\n\n", utils.ShortID(item.ID)))
+		b.WriteString(fmt.Sprintf("Created  : %s\n", item.Timestamp))
+		if item.Type == "log:promoted" {
+			b.WriteString("Status   : Promoted to Note\n")
+		}
+		if item.DeletedReason != "" {
+			b.WriteString(fmt.Sprintf("Deleted  : %s\n", wrapText(item.DeletedReason, previewWidth)))
+		}
+		b.WriteString("\nContent  :\n")
+		b.WriteString(wrapText(item.Display, previewWidth))
+		b.WriteString("\n")
+	} else {
+		b.WriteString(fmt.Sprintf("=== NOTE [%s] ===\n\n", utils.ShortID(item.ID)))
+		b.WriteString(fmt.Sprintf("Title    : %s\n", wrapText(item.Display, previewWidth)))
+		b.WriteString(fmt.Sprintf("Type     : %s\n", item.Type))
+		if item.Status != "" {
+			b.WriteString(fmt.Sprintf("Status   : %s\n", item.Status))
+		}
+		if item.Area != "" {
+			b.WriteString(fmt.Sprintf("Area     : %s\n", item.Area))
+		}
+		b.WriteString(fmt.Sprintf("Updated  : %s\n", item.Timestamp))
+		if len(item.Tags) > 0 {
+			b.WriteString(fmt.Sprintf("Tags     : #%s\n", strings.Join(item.Tags, " #")))
+		}
+		if item.DeletedReason != "" {
+			b.WriteString(fmt.Sprintf("Deleted  : %s\n", wrapText(item.DeletedReason, previewWidth)))
+		}
+		b.WriteString("\n--- BODY / FLESH ---\n")
+		trimmedFlesh := strings.TrimSpace(item.Flesh)
+		if trimmedFlesh != "" {
+			b.WriteString(wrapText(trimmedFlesh, previewWidth))
+		} else {
+			b.WriteString("(no flesh body)")
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// GetActiveCLIItems fetches all active notes and daily logs formatted as CLIItems.
+func GetActiveCLIItems() ([]CLIItem, error) {
+	var items []CLIItem
+
+	// 1. Batch fetch all note tags in a single SQL query
+	tagsMap, _ := db.GetAllNoteTagsMap()
+
+	// 2. Active Notes
+	notes, err := db.ListNotes("")
+	if err != nil {
+		return nil, err
+	}
+	for _, n := range notes {
+		items = append(items, CLIItem{
+			ID:        n.ID,
+			Type:      string(n.Type),
+			Status:    string(n.Status),
+			Area:      string(n.Area),
+			Display:   n.Note,
+			Flesh:     n.NoteFlesh,
+			Tags:      tagsMap[n.ID],
+			Timestamp: n.UpdatedAt.Format("2006-01-02 15:04"),
+			IsLog:     false,
+		})
+	}
+
+	// 3. Active Daily Logs
+	logs, err := db.GetDailyLogsFilter(nil, nil, true, false)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range logs {
+		logType := "log"
+		if l.NoteID != "" {
+			logType = "log:promoted"
+		}
+		items = append(items, CLIItem{
+			ID:        l.ID,
+			Type:      logType,
+			Display:   l.Content,
+			Timestamp: l.CreatedAt.Format("2006-01-02 15:04"),
+			IsLog:     true,
+		})
+	}
+
+	return items, nil
+}
+
+// GetDeletedCLIItems fetches all soft-deleted notes and daily logs formatted as CLIItems.
+func GetDeletedCLIItems() ([]CLIItem, error) {
+	var items []CLIItem
+
+	tagsMap, _ := db.GetAllNoteTagsMap()
+
+	// 1. Deleted Notes
+	allNotes, err := db.ListNotesExtended("", "", "", true)
+	if err != nil {
+		return nil, err
+	}
+	for _, n := range allNotes {
+		if !n.DeletedAt.IsZero() {
+			items = append(items, CLIItem{
+				ID:            n.ID,
+				Type:          string(n.Type),
+				Status:        string(n.Status),
+				Area:          string(n.Area),
+				Display:       n.Note,
+				Flesh:         n.NoteFlesh,
+				Tags:          tagsMap[n.ID],
+				Timestamp:     n.DeletedAt.Format("2006-01-02 15:04"),
+				IsLog:         false,
+				DeletedReason: n.DeletedNote,
+			})
+		}
+	}
+
+	// 2. Deleted Daily Logs
+	allLogs, err := db.GetDailyLogsFilter(nil, nil, true, true)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range allLogs {
+		if !l.DeletedAt.IsZero() {
+			items = append(items, CLIItem{
+				ID:            l.ID,
+				Type:          "log",
+				Display:       l.Content,
+				Timestamp:     l.DeletedAt.Format("2006-01-02 15:04"),
+				IsLog:         true,
+				DeletedReason: l.DeletedNote,
+			})
+		}
+	}
+
+	return items, nil
+}
+
+// SelectCLIItem launches the interactive fuzzy-finder with standard preview window.
+// Returns (nil, nil) if the user aborted the picker (Ctrl+C / Esc).
+func SelectCLIItem(items []CLIItem) (*CLIItem, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	idx, err := fuzzyfinder.Find(items, func(i int) string {
+		return items[i].FormatFuzzy()
+	}, fuzzyfinder.WithPreviewWindow(func(i int, width, height int) string {
+		if i < 0 || i >= len(items) {
+			return ""
+		}
+		return items[i].RenderPreview(width)
+	}))
+	if err != nil {
+		if err == fuzzyfinder.ErrAbort {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &items[idx], nil
+}
+
+// SelectCLIItemsMulti launches the interactive multi-selection fuzzy-finder with standard preview window.
+// Returns (nil, nil) if the user aborted the picker (Ctrl+C / Esc).
+func SelectCLIItemsMulti(items []CLIItem) ([]CLIItem, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	idxs, err := fuzzyfinder.FindMulti(items, func(i int) string {
+		return items[i].FormatFuzzy()
+	}, fuzzyfinder.WithPreviewWindow(func(i int, width, height int) string {
+		if i < 0 || i >= len(items) {
+			return ""
+		}
+		return items[i].RenderPreview(width)
+	}))
+	if err != nil {
+		if err == fuzzyfinder.ErrAbort {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var selected []CLIItem
+	for _, idx := range idxs {
+		selected = append(selected, items[idx])
+	}
+	return selected, nil
+}

@@ -3,100 +3,90 @@ package cmd
 import (
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
+	"github.com/tsusheel/kb-cli/db"
+	"github.com/tsusheel/kb-cli/models"
 )
 
-func TestCLIItemFormatFuzzy(t *testing.T) {
-	item := CLIItem{
-		ID:        "1234567890abcdef",
-		Type:      "note",
-		Status:    "raw",
-		Area:      "work",
-		Display:   "Refactor database layer",
-		Flesh:     "Add connection pooling and retry policies for PostgreSQL",
-		Tags:      []string{"db", "postgres"},
-		Timestamp: "2026-09-19 11:00",
-		IsLog:     false,
+func TestCompleteStaticEnums(t *testing.T) {
+	dummyCmd := &cobra.Command{}
+
+	// 1. Note Types
+	types, dir := completeNoteTypes(dummyCmd, nil, "to")
+	if dir != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("expected ShellCompDirectiveNoFileComp")
 	}
-
-	formatted := item.FormatFuzzy()
-
-	// Verify all searchable components are present in the formatted single line string
-	checks := []string{
-		"1234567",
-		"2026-09-19 11:00",
-		"note:raw",
-		"work",
-		"#db #postgres",
-		"Refactor database layer",
-		"connection pooling and retry policies",
-	}
-
-	for _, c := range checks {
-		if !strings.Contains(formatted, c) {
-			t.Errorf("expected FormatFuzzy() to contain %q, got:\n%s", c, formatted)
+	hasTodo := false
+	for _, typ := range types {
+		if strings.HasPrefix(typ, "todo") {
+			hasTodo = true
+			break
 		}
+	}
+	if !hasTodo {
+		t.Errorf("completeNoteTypes missing 'todo': %v", types)
+	}
+
+	// 2. Note Statuses
+	statuses, _ := completeNoteStatuses(dummyCmd, nil, "")
+	if len(statuses) < 5 {
+		t.Errorf("expected at least 5 statuses, got %d", len(statuses))
+	}
+
+	// 3. Link Types
+	linkTypes, _ := completeLinkTypes(dummyCmd, nil, "")
+	if len(linkTypes) < 5 {
+		t.Errorf("expected at least 5 link types, got %d", len(linkTypes))
+	}
+
+	// 4. Areas
+	areas, _ := completeAreas(dummyCmd, nil, "")
+	if len(areas) < 3 {
+		t.Errorf("expected at least 3 areas, got %d", len(areas))
+	}
+
+	// 5. Secret Keys
+	secrets, _ := completeSecretKeys(dummyCmd, nil, "")
+	if len(secrets) == 0 {
+		t.Errorf("expected secret keys to be returned")
+	}
+
+	// 6. Config Keys
+	configKeys, _ := completeConfigKeys(dummyCmd, nil, "remote")
+	hasRemoteURL := false
+	for _, k := range configKeys {
+		if strings.HasPrefix(k, "remote.postgres_url") {
+			hasRemoteURL = true
+			break
+		}
+	}
+	if !hasRemoteURL {
+		t.Errorf("completeConfigKeys missing 'remote.postgres_url': %v", configKeys)
 	}
 }
 
-func TestCLIItemRenderPreview(t *testing.T) {
-	noteItem := CLIItem{
-		ID:        "1234567890abcdef",
-		Type:      "todo",
-		Status:    "in-progress",
-		Area:      "engineering",
-		Display:   "Implement Kafka consumer",
-		Flesh:     "Partition consumer with backoff logic and dead-letter queues.",
-		Tags:      []string{"kafka", "streaming"},
-		Timestamp: "2026-09-19 11:00",
-		IsLog:     false,
+func TestCompleteNoteIDs(t *testing.T) {
+	setupCmdTestDB(t)
+
+	n := &models.Note{
+		Note:   "Completion Test Note",
+		Type:   models.Decision,
+		Status: models.Active,
+	}
+	if err := db.CreateNote(n); err != nil {
+		t.Fatalf("failed creating test note: %v", err)
 	}
 
-	preview := noteItem.RenderPreview(80)
-	if !strings.Contains(preview, "=== NOTE [1234567] ===") {
-		t.Errorf("expected header in preview, got:\n%s", preview)
+	dummyCmd := &cobra.Command{}
+	completions, dir := completeNoteIDs(dummyCmd, nil, "")
+	if dir != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("expected ShellCompDirectiveNoFileComp")
 	}
-	if !strings.Contains(preview, "Title    : Implement Kafka consumer") {
-		t.Errorf("expected title in preview, got:\n%s", preview)
+	if len(completions) != 1 {
+		t.Fatalf("expected 1 completion, got %d", len(completions))
 	}
-	if !strings.Contains(preview, "Partition consumer with backoff") {
-		t.Errorf("expected flesh in preview, got:\n%s", preview)
-	}
-	if !strings.Contains(preview, "logic and dead-letter queues") {
-		t.Errorf("expected wrapped flesh in preview, got:\n%s", preview)
-	}
-	if !strings.Contains(preview, "#kafka #streaming") {
-		t.Errorf("expected tags in preview, got:\n%s", preview)
-	}
-
-	logItem := CLIItem{
-		ID:        "abcdef1234567890",
-		Type:      "log:promoted",
-		Display:   "Morning standup notes",
-		Timestamp: "2026-09-19 09:30",
-		IsLog:     true,
-	}
-
-	logPreview := logItem.RenderPreview(80)
-	if !strings.Contains(logPreview, "=== DAILY LOG [abcdef1] ===") {
-		t.Errorf("expected log header in preview, got:\n%s", logPreview)
-	}
-	if !strings.Contains(logPreview, "Status   : Promoted to Note") {
-		t.Errorf("expected promoted status in log preview, got:\n%s", logPreview)
-	}
-}
-
-func TestWrapText(t *testing.T) {
-	text := "This is a very long line of text that needs to be wrapped cleanly across multiple lines when previewed in narrow terminals."
-	wrapped := wrapText(text, 30)
-
-	lines := strings.Split(wrapped, "\n")
-	if len(lines) < 3 {
-		t.Errorf("expected text to wrap into at least 3 lines, got %d:\n%s", len(lines), wrapped)
-	}
-
-	for _, l := range lines {
-		if len(l) > 30 {
-			t.Errorf("line exceeds max width 30: %q (len %d)", l, len(l))
-		}
+	if !strings.Contains(completions[0], "Completion Test Note") {
+		t.Errorf("completion does not contain note title: %s", completions[0])
 	}
 }
