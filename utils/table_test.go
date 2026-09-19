@@ -217,3 +217,68 @@ func TestRenderAuditTable(t *testing.T) {
 	}
 }
 
+func TestRenderBacklinksAndOrphansTable(t *testing.T) {
+	links := []models.Link{
+		{
+			ID:        "link1",
+			FromNote:  "11111111111111111111111111111111",
+			ToNote:    "22222222222222222222222222222222",
+			Type:      models.DependsOn,
+			CreatedAt: time.Now(),
+		},
+	}
+	noteMap := map[string]*models.Note{
+		"11111111111111111111111111111111": {ID: "11111111111111111111111111111111", Note: "Source Feature"},
+	}
+
+	var buf bytes.Buffer
+	RenderBacklinksTable(links, noteMap, &buf)
+	if !strings.Contains(buf.String(), "Source Feature") || !strings.Contains(buf.String(), "depends_on") {
+		t.Errorf("expected backlinks table output, got: %s", buf.String())
+	}
+
+	var orphanBuf bytes.Buffer
+	orphans := []models.Note{
+		{ID: "33333333333333333333333333333333", Note: "Lonely Note", Type: models.DefaultNote, UpdatedAt: time.Now()},
+	}
+	RenderOrphansTable(orphans, &orphanBuf)
+	if !strings.Contains(orphanBuf.String(), "Lonely Note") {
+		t.Errorf("expected orphan table output, got: %s", orphanBuf.String())
+	}
+}
+
+func TestRenderStatsAndGraph(t *testing.T) {
+	stats := &models.KBStats{
+		TotalActiveNotes:  15,
+		TotalDeletedNotes: 2,
+		NotesByType:       map[string]int{"project": 3, "todo": 5, "note": 7},
+		TotalDailyLogs:    20,
+		TodayDailyLogs:    3,
+		ConsecutiveStreak: 4,
+	}
+
+	var statsBuf bytes.Buffer
+	RenderStatsDashboard(stats, &statsBuf)
+	if !strings.Contains(statsBuf.String(), "Total Active Notes") || !strings.Contains(statsBuf.String(), "15") {
+		t.Errorf("expected stats output, got: %s", statsBuf.String())
+	}
+
+	rootNote := &models.Note{
+		ID:   "root1234567890abcdef1234567890",
+		Note: "Root Project",
+		Type: models.Project,
+	}
+	outgoing := []models.Link{
+		{FromNote: rootNote.ID, ToNote: "target1234", Type: models.RelatedTo},
+	}
+	noteMap := map[string]*models.Note{
+		"target1234": {ID: "target1234", Note: "Subtask Note"},
+	}
+
+	var graphBuf bytes.Buffer
+	RenderGraphTree(rootNote, outgoing, nil, noteMap, &graphBuf)
+	if !strings.Contains(graphBuf.String(), "Root Project") || !strings.Contains(graphBuf.String(), "Subtask Note") {
+		t.Errorf("expected graph tree output, got: %s", graphBuf.String())
+	}
+}
+

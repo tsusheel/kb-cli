@@ -106,3 +106,109 @@ func GetLinksForNote(noteID string) ([]models.Link, error) {
 
 	return links, nil
 }
+
+func GetIncomingLinks(noteID string) ([]models.Link, error) {
+	fullNoteID, err := ResolveID(noteID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := `SELECT id, from_note, to_note, type, created_at, deleted_at, deleted_note FROM links WHERE to_note = ? AND deleted_at IS NULL ORDER BY created_at DESC`
+	rows, err := DB.Query(query, fullNoteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []models.Link
+	for rows.Next() {
+		var l models.Link
+		var createdAt sql.NullTime
+		var deletedAt sql.NullTime
+		var deletedNote sql.NullString
+		if err := rows.Scan(&l.ID, &l.FromNote, &l.ToNote, &l.Type, &createdAt, &deletedAt, &deletedNote); err != nil {
+			return nil, err
+		}
+		if createdAt.Valid {
+			l.CreatedAt = createdAt.Time
+		}
+		if deletedAt.Valid {
+			l.DeletedAt = deletedAt.Time
+		}
+		if deletedNote.Valid {
+			l.DeletedNote = deletedNote.String
+		}
+		links = append(links, l)
+	}
+
+	return links, nil
+}
+
+func GetOutgoingLinks(noteID string) ([]models.Link, error) {
+	fullNoteID, err := ResolveID(noteID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := `SELECT id, from_note, to_note, type, created_at, deleted_at, deleted_note FROM links WHERE from_note = ? AND deleted_at IS NULL ORDER BY created_at DESC`
+	rows, err := DB.Query(query, fullNoteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []models.Link
+	for rows.Next() {
+		var l models.Link
+		var createdAt sql.NullTime
+		var deletedAt sql.NullTime
+		var deletedNote sql.NullString
+		if err := rows.Scan(&l.ID, &l.FromNote, &l.ToNote, &l.Type, &createdAt, &deletedAt, &deletedNote); err != nil {
+			return nil, err
+		}
+		if createdAt.Valid {
+			l.CreatedAt = createdAt.Time
+		}
+		if deletedAt.Valid {
+			l.DeletedAt = deletedAt.Time
+		}
+		if deletedNote.Valid {
+			l.DeletedNote = deletedNote.String
+		}
+		links = append(links, l)
+	}
+
+	return links, nil
+}
+
+func GetAllActiveLinks() ([]models.Link, error) {
+	query := `SELECT id, from_note, to_note, type, created_at, deleted_at, deleted_note FROM links WHERE deleted_at IS NULL`
+	rows, err := DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var links []models.Link
+	for rows.Next() {
+		var l models.Link
+		var createdAt sql.NullTime
+		var deletedAt sql.NullTime
+		var deletedNote sql.NullString
+		if err := rows.Scan(&l.ID, &l.FromNote, &l.ToNote, &l.Type, &createdAt, &deletedAt, &deletedNote); err != nil {
+			return nil, err
+		}
+		if createdAt.Valid {
+			l.CreatedAt = createdAt.Time
+		}
+		if deletedAt.Valid {
+			l.DeletedAt = deletedAt.Time
+		}
+		if deletedNote.Valid {
+			l.DeletedNote = deletedNote.String
+		}
+		links = append(links, l)
+	}
+
+	return links, nil
+}

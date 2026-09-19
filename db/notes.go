@@ -476,3 +476,45 @@ func GetRawNotes(todayOnly bool) ([]models.Note, error) {
 
 	return notes, nil
 }
+
+// GetOrphanNotes returns active notes that have no associated tags and no incoming or outgoing links.
+func GetOrphanNotes() ([]models.Note, error) {
+	query := `
+		SELECT n.id, n.note, n.note_flesh, n.type, n.status, n.area, n.target_date_time, n.created_at, n.updated_at, n.deleted_at, n.deleted_note
+		FROM notes n
+		WHERE n.deleted_at IS NULL
+		  AND n.id NOT IN (SELECT note_id FROM note_tags)
+		  AND n.id NOT IN (SELECT from_note FROM links WHERE deleted_at IS NULL)
+		  AND n.id NOT IN (SELECT to_note FROM links WHERE deleted_at IS NULL)
+		ORDER BY n.updated_at DESC
+	`
+	rows, err := DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var notes []models.Note
+	for rows.Next() {
+		var n models.Note
+		var targetDT sql.NullTime
+		var deletedDT sql.NullTime
+		var deletedNote sql.NullString
+		err := rows.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt, &deletedDT, &deletedNote)
+		if err != nil {
+			return nil, err
+		}
+		if targetDT.Valid {
+			n.TargetDateTime = targetDT.Time
+		}
+		if deletedDT.Valid {
+			n.DeletedAt = deletedDT.Time
+		}
+		if deletedNote.Valid {
+			n.DeletedNote = deletedNote.String
+		}
+		notes = append(notes, n)
+	}
+
+	return notes, nil
+}

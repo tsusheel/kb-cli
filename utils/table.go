@@ -703,3 +703,254 @@ func RenderAuditDiffCard(entry *models.AuditEntry, out io.Writer) {
 	}
 }
 
+// RenderBacklinksTable renders incoming backlinks pointing to a note in a clean rounded table.
+func RenderBacklinksTable(links []models.Link, noteMap map[string]*models.Note, out io.Writer) {
+	if out == nil {
+		out = os.Stdout
+	}
+	if len(links) == 0 {
+		fmt.Fprintln(out, "No incoming backlinks found.")
+		return
+	}
+
+	termWidth := GetTerminalWidth()
+	maxValWidth := termWidth - 45
+	if maxValWidth < 30 {
+		maxValWidth = 30
+	}
+	if maxValWidth > 80 {
+		maxValWidth = 80
+	}
+
+	table := tablewriter.NewTable(
+		out,
+		tablewriter.WithHeader([]string{"FROM ID", "SOURCE NOTE TITLE", "RELATION TYPE", "LINKED AT"}),
+		tablewriter.WithHeaderAutoFormat(tw.Off),
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbols(tw.StyleRounded),
+			Settings: tw.Settings{
+				Separators: tw.Separators{
+					BetweenRows:    tw.On,
+					BetweenColumns: tw.On,
+					ShowHeader:     tw.On,
+				},
+			},
+		}),
+		tablewriter.WithRowMaxWidth(maxValWidth),
+		tablewriter.WithHeaderAlignment(tw.AlignLeft),
+		tablewriter.WithRowAlignment(tw.AlignLeft),
+	)
+
+	for _, l := range links {
+		title := "<Untitled>"
+		if sourceNote, ok := noteMap[l.FromNote]; ok && sourceNote != nil && sourceNote.Note != "" {
+			title = sourceNote.Note
+		}
+		table.Append([]string{
+			ShortID(l.FromNote),
+			title,
+			string(l.Type),
+			l.CreatedAt.Format("2006-01-02 15:04"),
+		})
+	}
+
+	table.Render()
+}
+
+// RenderOrphansTable renders unlinked, untagged notes in a rounded table.
+func RenderOrphansTable(notes []models.Note, out io.Writer) {
+	if out == nil {
+		out = os.Stdout
+	}
+	if len(notes) == 0 {
+		fmt.Fprintln(out, "🎉 No orphan notes! All active notes have tags or relationships.")
+		return
+	}
+
+	termWidth := GetTerminalWidth()
+	maxValWidth := termWidth - 38
+	if maxValWidth < 30 {
+		maxValWidth = 30
+	}
+	if maxValWidth > 80 {
+		maxValWidth = 80
+	}
+
+	table := tablewriter.NewTable(
+		out,
+		tablewriter.WithHeader([]string{"ID", "ORPHAN NOTE TITLE", "TYPE", "UPDATED"}),
+		tablewriter.WithHeaderAutoFormat(tw.Off),
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbols(tw.StyleRounded),
+			Settings: tw.Settings{
+				Separators: tw.Separators{
+					BetweenRows:    tw.On,
+					BetweenColumns: tw.On,
+					ShowHeader:     tw.On,
+				},
+			},
+		}),
+		tablewriter.WithRowMaxWidth(maxValWidth),
+		tablewriter.WithHeaderAlignment(tw.AlignLeft),
+		tablewriter.WithRowAlignment(tw.AlignLeft),
+	)
+
+	for _, n := range notes {
+		displayNote := n.Note
+		if displayNote == "" {
+			displayNote = "<Untitled>"
+		}
+		table.Append([]string{
+			ShortID(n.ID),
+			displayNote,
+			string(n.Type),
+			n.UpdatedAt.Format("2006-01-02 15:04"),
+		})
+	}
+
+	table.Render()
+}
+
+// RenderStatsDashboard renders the comprehensive knowledge base analytics dashboard.
+func RenderStatsDashboard(stats *models.KBStats, out io.Writer) {
+	if stats == nil {
+		return
+	}
+	if out == nil {
+		out = os.Stdout
+	}
+
+	termWidth := GetTerminalWidth()
+	maxValWidth := termWidth - 28
+	if maxValWidth < 30 {
+		maxValWidth = 30
+	}
+	if maxValWidth > 100 {
+		maxValWidth = 100
+	}
+
+	table := tablewriter.NewTable(
+		out,
+		tablewriter.WithHeader([]string{"METRIC", "VALUE"}),
+		tablewriter.WithHeaderAutoFormat(tw.Off),
+		tablewriter.WithRendition(tw.Rendition{
+			Symbols: tw.NewSymbols(tw.StyleRounded),
+			Settings: tw.Settings{
+				Separators: tw.Separators{
+					BetweenRows:    tw.On,
+					BetweenColumns: tw.On,
+					ShowHeader:     tw.On,
+				},
+			},
+		}),
+		tablewriter.WithRowMaxWidth(maxValWidth),
+		tablewriter.WithHeaderAlignment(tw.AlignLeft),
+		tablewriter.WithRowAlignment(tw.AlignLeft),
+	)
+
+	table.Append([]string{"Total Active Notes", fmt.Sprintf("%d", stats.TotalActiveNotes)})
+	table.Append([]string{"Soft-Deleted Notes", fmt.Sprintf("%d", stats.TotalDeletedNotes)})
+	table.Append([]string{"Daily Stream Logs", fmt.Sprintf("%d total (%d today)", stats.TotalDailyLogs, stats.TodayDailyLogs)})
+
+	streakStr := fmt.Sprintf("%d day(s)", stats.ConsecutiveStreak)
+	if stats.ConsecutiveStreak > 1 {
+		streakStr += " 🔥"
+	}
+	table.Append([]string{"Current Activity Streak", streakStr})
+
+	// Types breakdown
+	var typeList []string
+	for k, v := range stats.NotesByType {
+		typeList = append(typeList, fmt.Sprintf("%s: %d", k, v))
+	}
+	if len(typeList) > 0 {
+		table.Append([]string{"Notes by Type", strings.Join(typeList, " | ")})
+	}
+
+	// Status breakdown
+	var statusList []string
+	for k, v := range stats.NotesByStatus {
+		statusList = append(statusList, fmt.Sprintf("%s: %d", k, v))
+	}
+	if len(statusList) > 0 {
+		table.Append([]string{"Notes by Status", strings.Join(statusList, " | ")})
+	}
+
+	// Area breakdown
+	var areaList []string
+	for k, v := range stats.NotesByArea {
+		areaList = append(areaList, fmt.Sprintf("%s: %d", k, v))
+	}
+	if len(areaList) > 0 {
+		table.Append([]string{"Notes by Area", strings.Join(areaList, " | ")})
+	}
+
+	// Top Tags
+	table.Append([]string{"Total Unique Tags", fmt.Sprintf("%d", stats.TotalTags)})
+	if len(stats.TopTags) > 0 {
+		var tagStrs []string
+		for _, tt := range stats.TopTags {
+			tagStrs = append(tagStrs, fmt.Sprintf("#%s (%d)", tt.Name, tt.Count))
+		}
+		table.Append([]string{"Top Tags", strings.Join(tagStrs, ", ")})
+	}
+
+	// Top Hub Notes
+	if len(stats.TopHubNotes) > 0 {
+		var hubStrs []string
+		for _, hn := range stats.TopHubNotes {
+			hubStrs = append(hubStrs, fmt.Sprintf("[%s] %q (%d links)", ShortID(hn.ID), hn.Title, hn.LinkCount))
+		}
+		table.Append([]string{"Top Hub Notes", strings.Join(hubStrs, "\n")})
+	}
+
+	table.Render()
+}
+
+// RenderGraphTree renders ASCII tree representation of note connections.
+func RenderGraphTree(rootNote *models.Note, outgoing []models.Link, incoming []models.Link, noteMap map[string]*models.Note, out io.Writer) {
+	if out == nil {
+		out = os.Stdout
+	}
+	if rootNote == nil {
+		return
+	}
+
+	fmt.Fprintf(out, "📦 [%s] %s (%s)\n", ShortID(rootNote.ID), rootNote.Note, rootNote.Type)
+
+	if len(outgoing) == 0 && len(incoming) == 0 {
+		fmt.Fprintln(out, "  └── (no outgoing or incoming links)")
+		return
+	}
+
+	if len(outgoing) > 0 {
+		fmt.Fprintln(out, "  ├── ➔ Outgoing Connections:")
+		for i, l := range outgoing {
+			prefix := "  │   ├──"
+			if i == len(outgoing)-1 && len(incoming) == 0 {
+				prefix = "  │   └──"
+			}
+			targetTitle := "<Untitled>"
+			if tn, ok := noteMap[l.ToNote]; ok && tn != nil && tn.Note != "" {
+				targetTitle = tn.Note
+			}
+			fmt.Fprintf(out, "%s --(%s)--> [%s] %s\n", prefix, l.Type, ShortID(l.ToNote), targetTitle)
+		}
+	}
+
+	if len(incoming) > 0 {
+		fmt.Fprintln(out, "  └── ⬅ Incoming Backlinks:")
+		for i, l := range incoming {
+			prefix := "      ├──"
+			if i == len(incoming)-1 {
+				prefix = "      └──"
+			}
+			sourceTitle := "<Untitled>"
+			if sn, ok := noteMap[l.FromNote]; ok && sn != nil && sn.Note != "" {
+				sourceTitle = sn.Note
+			}
+			fmt.Fprintf(out, "%s <--( %s )-- [%s] %s\n", prefix, l.Type, ShortID(l.FromNote), sourceTitle)
+		}
+	}
+}
+
