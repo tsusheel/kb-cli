@@ -87,7 +87,7 @@ Examples:
 				if i < 0 || i >= len(items) {
 					return ""
 				}
-				return items[i].RenderPreview()
+				return items[i].RenderPreview(width)
 			}))
 			if err != nil {
 				if err == fuzzyfinder.ErrAbort {

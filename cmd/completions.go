@@ -58,8 +58,94 @@ func (item CLIItem) FormatFuzzy() string {
 	return fmt.Sprintf("[%s] [%s] (%-10s)%s  %s%s", shortID, item.Timestamp, typeStr, metaStr, item.Display, fleshSnippet)
 }
 
-// RenderPreview generates formatted terminal text for the fuzzy-finder preview pane
-func (item CLIItem) RenderPreview() string {
+// wrapText wraps text to a maximum column width at word boundaries.
+func wrapText(text string, width int) string {
+	if width <= 0 {
+		width = 80
+	}
+	if width < 10 {
+		width = 10
+	}
+
+	lines := strings.Split(text, "\n")
+	var wrappedLines []string
+
+	for _, line := range lines {
+		line = strings.TrimRight(line, "\r")
+		if len(line) <= width {
+			wrappedLines = append(wrappedLines, line)
+			continue
+		}
+
+		words := strings.Fields(line)
+		if len(words) == 0 {
+			wrappedLines = append(wrappedLines, "")
+			continue
+		}
+
+		var currentLine strings.Builder
+		currentLen := 0
+
+		for _, word := range words {
+			wordLen := len(word)
+			if currentLen == 0 {
+				if wordLen > width {
+					for len(word) > width {
+						wrappedLines = append(wrappedLines, word[:width])
+						word = word[width:]
+					}
+					if len(word) > 0 {
+						currentLine.WriteString(word)
+						currentLen = len(word)
+					}
+				} else {
+					currentLine.WriteString(word)
+					currentLen = wordLen
+				}
+			} else {
+				if currentLen+1+wordLen <= width {
+					currentLine.WriteString(" ")
+					currentLine.WriteString(word)
+					currentLen += 1 + wordLen
+				} else {
+					wrappedLines = append(wrappedLines, currentLine.String())
+					currentLine.Reset()
+					currentLen = 0
+
+					if wordLen > width {
+						for len(word) > width {
+							wrappedLines = append(wrappedLines, word[:width])
+							word = word[width:]
+						}
+						if len(word) > 0 {
+							currentLine.WriteString(word)
+							currentLen = len(word)
+						}
+					} else {
+						currentLine.WriteString(word)
+						currentLen = wordLen
+					}
+				}
+			}
+		}
+		if currentLine.Len() > 0 {
+			wrappedLines = append(wrappedLines, currentLine.String())
+		}
+	}
+
+	return strings.Join(wrappedLines, "\n")
+}
+
+// RenderPreview generates formatted terminal text for the fuzzy-finder preview pane with word wrapping.
+func (item CLIItem) RenderPreview(width int) string {
+	if width <= 0 {
+		width = 80
+	}
+	contentWidth := width
+	if contentWidth > 4 {
+		contentWidth -= 2
+	}
+
 	var b strings.Builder
 	if item.IsLog {
 		b.WriteString(fmt.Sprintf("=== DAILY LOG [%s] ===\n\n", utils.ShortID(item.ID)))
@@ -68,12 +154,14 @@ func (item CLIItem) RenderPreview() string {
 			b.WriteString("Status   : Promoted to Note\n")
 		}
 		if item.DeletedReason != "" {
-			b.WriteString(fmt.Sprintf("Deleted  : %s\n", item.DeletedReason))
+			b.WriteString(fmt.Sprintf("Deleted  : %s\n", wrapText(item.DeletedReason, contentWidth)))
 		}
-		b.WriteString(fmt.Sprintf("\nContent  :\n%s\n", item.Display))
+		b.WriteString("\nContent  :\n")
+		b.WriteString(wrapText(item.Display, contentWidth))
+		b.WriteString("\n")
 	} else {
 		b.WriteString(fmt.Sprintf("=== NOTE [%s] ===\n\n", utils.ShortID(item.ID)))
-		b.WriteString(fmt.Sprintf("Title    : %s\n", item.Display))
+		b.WriteString(fmt.Sprintf("Title    : %s\n", wrapText(item.Display, contentWidth)))
 		b.WriteString(fmt.Sprintf("Type     : %s\n", item.Type))
 		if item.Status != "" {
 			b.WriteString(fmt.Sprintf("Status   : %s\n", item.Status))
@@ -86,12 +174,12 @@ func (item CLIItem) RenderPreview() string {
 			b.WriteString(fmt.Sprintf("Tags     : #%s\n", strings.Join(item.Tags, " #")))
 		}
 		if item.DeletedReason != "" {
-			b.WriteString(fmt.Sprintf("Deleted  : %s\n", item.DeletedReason))
+			b.WriteString(fmt.Sprintf("Deleted  : %s\n", wrapText(item.DeletedReason, contentWidth)))
 		}
 		b.WriteString("\n--- BODY / FLESH ---\n")
 		trimmedFlesh := strings.TrimSpace(item.Flesh)
 		if trimmedFlesh != "" {
-			b.WriteString(trimmedFlesh)
+			b.WriteString(wrapText(trimmedFlesh, contentWidth))
 		} else {
 			b.WriteString("(no flesh body)")
 		}

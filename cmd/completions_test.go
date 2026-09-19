@@ -51,7 +51,7 @@ func TestCLIItemRenderPreview(t *testing.T) {
 		IsLog:     false,
 	}
 
-	preview := noteItem.RenderPreview()
+	preview := noteItem.RenderPreview(80)
 	if !strings.Contains(preview, "=== NOTE [1234567] ===") {
 		t.Errorf("expected header in preview, got:\n%s", preview)
 	}
@@ -73,11 +73,27 @@ func TestCLIItemRenderPreview(t *testing.T) {
 		IsLog:     true,
 	}
 
-	logPreview := logItem.RenderPreview()
+	logPreview := logItem.RenderPreview(80)
 	if !strings.Contains(logPreview, "=== DAILY LOG [abcdef1] ===") {
 		t.Errorf("expected log header in preview, got:\n%s", logPreview)
 	}
 	if !strings.Contains(logPreview, "Status   : Promoted to Note") {
 		t.Errorf("expected promoted status in log preview, got:\n%s", logPreview)
+	}
+}
+
+func TestWrapText(t *testing.T) {
+	text := "This is a very long line of text that needs to be wrapped cleanly across multiple lines when previewed in narrow terminals."
+	wrapped := wrapText(text, 30)
+
+	lines := strings.Split(wrapped, "\n")
+	if len(lines) < 3 {
+		t.Errorf("expected text to wrap into at least 3 lines, got %d:\n%s", len(lines), wrapped)
+	}
+
+	for _, l := range lines {
+		if len(l) > 30 {
+			t.Errorf("line exceeds max width 30: %q (len %d)", l, len(l))
+		}
 	}
 }
