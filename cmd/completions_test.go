@@ -58,8 +58,11 @@ func TestCLIItemRenderPreview(t *testing.T) {
 	if !strings.Contains(preview, "Title    : Implement Kafka consumer") {
 		t.Errorf("expected title in preview, got:\n%s", preview)
 	}
-	if !strings.Contains(preview, "Partition consumer with backoff logic") {
+	if !strings.Contains(preview, "Partition consumer with backoff") {
 		t.Errorf("expected flesh in preview, got:\n%s", preview)
+	}
+	if !strings.Contains(preview, "logic and dead-letter queues") {
+		t.Errorf("expected wrapped flesh in preview, got:\n%s", preview)
 	}
 	if !strings.Contains(preview, "#kafka #streaming") {
 		t.Errorf("expected tags in preview, got:\n%s", preview)

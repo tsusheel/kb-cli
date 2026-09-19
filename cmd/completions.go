@@ -137,13 +137,15 @@ func wrapText(text string, width int) string {
 }
 
 // RenderPreview generates formatted terminal text for the fuzzy-finder preview pane with word wrapping.
-func (item CLIItem) RenderPreview(width int) string {
-	if width <= 0 {
-		width = 80
+func (item CLIItem) RenderPreview(totalWidth int) string {
+	if totalWidth <= 0 {
+		totalWidth = 80
 	}
-	contentWidth := width
-	if contentWidth > 4 {
-		contentWidth -= 2
+	// In go-fuzzyfinder, the preview pane occupies the right half of the terminal: [width/2 .. width-1]
+	// The maximum usable text width inside the preview pane is (totalWidth / 2) - 5
+	previewWidth := (totalWidth / 2) - 5
+	if previewWidth < 15 {
+		previewWidth = 15
 	}
 
 	var b strings.Builder
@@ -154,14 +156,14 @@ func (item CLIItem) RenderPreview(width int) string {
 			b.WriteString("Status   : Promoted to Note\n")
 		}
 		if item.DeletedReason != "" {
-			b.WriteString(fmt.Sprintf("Deleted  : %s\n", wrapText(item.DeletedReason, contentWidth)))
+			b.WriteString(fmt.Sprintf("Deleted  : %s\n", wrapText(item.DeletedReason, previewWidth)))
 		}
 		b.WriteString("\nContent  :\n")
-		b.WriteString(wrapText(item.Display, contentWidth))
+		b.WriteString(wrapText(item.Display, previewWidth))
 		b.WriteString("\n")
 	} else {
 		b.WriteString(fmt.Sprintf("=== NOTE [%s] ===\n\n", utils.ShortID(item.ID)))
-		b.WriteString(fmt.Sprintf("Title    : %s\n", wrapText(item.Display, contentWidth)))
+		b.WriteString(fmt.Sprintf("Title    : %s\n", wrapText(item.Display, previewWidth)))
 		b.WriteString(fmt.Sprintf("Type     : %s\n", item.Type))
 		if item.Status != "" {
 			b.WriteString(fmt.Sprintf("Status   : %s\n", item.Status))
@@ -174,12 +176,12 @@ func (item CLIItem) RenderPreview(width int) string {
 			b.WriteString(fmt.Sprintf("Tags     : #%s\n", strings.Join(item.Tags, " #")))
 		}
 		if item.DeletedReason != "" {
-			b.WriteString(fmt.Sprintf("Deleted  : %s\n", wrapText(item.DeletedReason, contentWidth)))
+			b.WriteString(fmt.Sprintf("Deleted  : %s\n", wrapText(item.DeletedReason, previewWidth)))
 		}
 		b.WriteString("\n--- BODY / FLESH ---\n")
 		trimmedFlesh := strings.TrimSpace(item.Flesh)
 		if trimmedFlesh != "" {
-			b.WriteString(wrapText(trimmedFlesh, contentWidth))
+			b.WriteString(wrapText(trimmedFlesh, previewWidth))
 		} else {
 			b.WriteString("(no flesh body)")
 		}
