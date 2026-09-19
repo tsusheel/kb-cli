@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,6 +35,39 @@ func SoftDeleteLink(linkID string, reason string) error {
 	query := `UPDATE links SET deleted_at = ?, deleted_note = ? WHERE id = ?`
 	_, err := DB.Exec(query, now, reason, linkID)
 	return err
+}
+
+func RemoveLink(fromID, toID string, reason string) error {
+	fullFromID, err := ResolveID(fromID)
+	if err != nil {
+		return err
+	}
+	fullToID, err := ResolveID(toID)
+	if err != nil {
+		return err
+	}
+	if reason == "" {
+		reason = "deleted"
+	}
+	now := time.Now()
+	query := `UPDATE links SET deleted_at = ?, deleted_note = ? WHERE from_note = ? AND to_note = ? AND deleted_at IS NULL`
+	res, err := DB.Exec(query, now, reason, fullFromID, fullToID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		fromDisplay := fullFromID
+		if len(fromDisplay) > 7 {
+			fromDisplay = fromDisplay[:7]
+		}
+		toDisplay := fullToID
+		if len(toDisplay) > 7 {
+			toDisplay = toDisplay[:7]
+		}
+		return fmt.Errorf("no active link found from [%s] to [%s]", fromDisplay, toDisplay)
+	}
+	return nil
 }
 
 func GetLinksForNote(noteID string) ([]models.Link, error) {

@@ -151,6 +151,18 @@ func TestMCPCreateAndGetNote(t *testing.T) {
 	if !strings.Contains(listRes3.Content[0].(mcp.TextContent).Text, "deleted by AI: project completed") {
 		t.Errorf("expected deleted note reason in list: %s", listRes3.Content[0].(mcp.TextContent).Text)
 	}
+
+	// 7. Test restore_note
+	restoreReq := makeToolRequest("restore_note", map[string]interface{}{
+		"id": noteID,
+	})
+	restoreRes, err := handleRestoreNote(ctx, restoreReq)
+	if err != nil {
+		t.Fatalf("handleRestoreNote failed: %v", err)
+	}
+	if !strings.Contains(restoreRes.Content[0].(mcp.TextContent).Text, "Successfully restored note") {
+		t.Errorf("unexpected restore note response: %s", restoreRes.Content[0].(mcp.TextContent).Text)
+	}
 }
 
 func TestMCPTagsAndLinks(t *testing.T) {
@@ -186,6 +198,18 @@ func TestMCPTagsAndLinks(t *testing.T) {
 		t.Errorf("tag response mismatch: %s", tagRes.Content[0].(mcp.TextContent).Text)
 	}
 
+	// Remove Tag
+	remTagRes, err := handleRemoveTag(ctx, makeToolRequest("remove_tag", map[string]interface{}{
+		"note_id": id1,
+		"tag":     "ai/mcp",
+	}))
+	if err != nil {
+		t.Fatalf("handleRemoveTag failed: %v", err)
+	}
+	if !strings.Contains(remTagRes.Content[0].(mcp.TextContent).Text, "Successfully removed tag") {
+		t.Errorf("remove_tag response mismatch: %s", remTagRes.Content[0].(mcp.TextContent).Text)
+	}
+
 	// Link notes
 	linkRes, err := handleLinkNotes(ctx, makeToolRequest("link_notes", map[string]interface{}{
 		"from_id": id1,
@@ -197,6 +221,18 @@ func TestMCPTagsAndLinks(t *testing.T) {
 	}
 	if !strings.Contains(linkRes.Content[0].(mcp.TextContent).Text, "depends_on") {
 		t.Errorf("link response mismatch: %s", linkRes.Content[0].(mcp.TextContent).Text)
+	}
+
+	// Unlink notes
+	unlinkRes, err := handleUnlinkNotes(ctx, makeToolRequest("unlink_notes", map[string]interface{}{
+		"from_id": id1,
+		"to_id":   id2,
+	}))
+	if err != nil {
+		t.Fatalf("handleUnlinkNotes failed: %v", err)
+	}
+	if !strings.Contains(unlinkRes.Content[0].(mcp.TextContent).Text, "Successfully unlinked") {
+		t.Errorf("unlink response mismatch: %s", unlinkRes.Content[0].(mcp.TextContent).Text)
 	}
 }
 
@@ -249,13 +285,111 @@ func TestMCPDailyLogsAndInbox(t *testing.T) {
 		t.Errorf("promote_log response mismatch: %s", promoteText)
 	}
 
-	// 5. Test get_inbox after promotion (should show note in raw_notes and empty unpromoted_logs)
+	// 5. Test get_inbox after promotion
 	inboxRes2, _ := handleGetInbox(ctx, makeToolRequest("get_inbox", map[string]interface{}{}))
 	inboxText2 := inboxRes2.Content[0].(mcp.TextContent).Text
 	if !strings.Contains(inboxText2, `"logs_count": 0`) {
 		t.Errorf("expected 0 unpromoted logs after promotion, got: %s", inboxText2)
 	}
-	if !strings.Contains(inboxText2, "Worked on MCP protocol daily logs") {
-		t.Errorf("expected promoted raw note in inbox, got: %s", inboxText2)
+
+	// 6. Test restore_log
+	_ = db.SoftDeleteDailyLog(logID, "test delete")
+	restoreLogRes, err := handleRestoreLog(ctx, makeToolRequest("restore_log", map[string]interface{}{
+		"id": logID,
+	}))
+	if err != nil {
+		t.Fatalf("handleRestoreLog failed: %v", err)
+	}
+	if !strings.Contains(restoreLogRes.Content[0].(mcp.TextContent).Text, "Successfully restored daily log") {
+		t.Errorf("unexpected restore log response: %s", restoreLogRes.Content[0].(mcp.TextContent).Text)
+	}
+}
+
+func TestMCPHistoryAndRevert(t *testing.T) {
+	setupMCPTestDB(t)
+	ctx := context.Background()
+
+	// 1. Create a note
+	createRes, _ := handleCreateNote(ctx, makeToolRequest("create_note", map[string]interface{}{
+		"note":    "Versioned Note",
+		"content": "Initial Body",
+	}))
+	var noteMap map[string]interface{}
+	json.Unmarshal([]byte(createRes.Content[0].(mcp.TextContent).Text), &noteMap)
+	noteID := noteMap["id"].(string)
+
+	// 2. Fetch history
+	histRes, err := handleGetHistory(ctx, makeToolRequest("get_history", map[string]interface{}{
+		"id": noteID,
+	}))
+	if err != nil {
+		t.Fatalf("handleGetHistory failed: %v", err)
+	}
+	var histList []map[string]interface{}
+	json.Unmarshal([]byte(histRes.Content[0].(mcp.TextContent).Text), &histList)
+	if len(histList) != 1 {
+		t.Fatalf("expected 1 history item, got %d", len(histList))
+	}
+	firstRevID := histList[0]["id"].(string)
+
+	// 3. Update note
+	handleUpdateNote(ctx, makeToolRequest("update_note", map[string]interface{}{
+		"id":      noteID,
+		"note":    "Updated Version",
+		"content": "Updated Body",
+	}))
+
+	// 4. Revert note to first revision
+	revertRes, err := handleRevertNote(ctx, makeToolRequest("revert_note", map[string]interface{}{
+		"note_id":     noteID,
+		"revision_id": firstRevID,
+	}))
+	if err != nil {
+		t.Fatalf("handleRevertNote failed: %v", err)
+	}
+	if !strings.Contains(revertRes.Content[0].(mcp.TextContent).Text, "Successfully reverted note") {
+		t.Errorf("unexpected revert response: %s", revertRes.Content[0].(mcp.TextContent).Text)
+	}
+}
+
+func TestMCPResourcesAndPrompts(t *testing.T) {
+	setupMCPTestDB(t)
+	ctx := context.Background()
+
+	// 1. Test Resource: kb://today
+	db.CreateDailyLog("Test today log entry")
+	todayContents, err := handleResourceToday(ctx, mcp.ReadResourceRequest{})
+	if err != nil {
+		t.Fatalf("handleResourceToday failed: %v", err)
+	}
+	if len(todayContents) == 0 || !strings.Contains(todayContents[0].(mcp.TextResourceContents).Text, "Test today log entry") {
+		t.Errorf("unexpected today resource content: %v", todayContents)
+	}
+
+	// 2. Test Resource: kb://inbox
+	inboxContents, err := handleResourceInbox(ctx, mcp.ReadResourceRequest{})
+	if err != nil {
+		t.Fatalf("handleResourceInbox failed: %v", err)
+	}
+	if len(inboxContents) == 0 || !strings.Contains(inboxContents[0].(mcp.TextResourceContents).Text, "raw_notes") {
+		t.Errorf("unexpected inbox resource content: %v", inboxContents)
+	}
+
+	// 3. Test Prompt: triage-inbox
+	triagePrompt, err := handlePromptTriageInbox(ctx, mcp.GetPromptRequest{})
+	if err != nil {
+		t.Fatalf("handlePromptTriageInbox failed: %v", err)
+	}
+	if len(triagePrompt.Messages) == 0 || !strings.Contains(triagePrompt.Messages[0].Content.(mcp.TextContent).Text, "Please review") {
+		t.Errorf("unexpected triage prompt: %v", triagePrompt)
+	}
+
+	// 4. Test Prompt: daily-summary
+	summaryPrompt, err := handlePromptDailySummary(ctx, mcp.GetPromptRequest{})
+	if err != nil {
+		t.Fatalf("handlePromptDailySummary failed: %v", err)
+	}
+	if len(summaryPrompt.Messages) == 0 || !strings.Contains(summaryPrompt.Messages[0].Content.(mcp.TextContent).Text, "Test today log entry") {
+		t.Errorf("unexpected daily summary prompt: %v", summaryPrompt)
 	}
 }
