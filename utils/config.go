@@ -10,6 +10,28 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ExpandHome expands ~, ~/, ~\, $HOME, %USERPROFILE%, and environment variables in paths.
+func ExpandHome(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	if path == "~" {
+		return home
+	}
+	if strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
+		return filepath.Join(home, path[2:])
+	}
+	if strings.HasPrefix(path, "$HOME/") || strings.HasPrefix(path, `$HOME\`) {
+		return filepath.Join(home, path[6:])
+	}
+	return os.ExpandEnv(path)
+}
+
 // GetPostgresURL resolves the PostgreSQL connection URL from viper config or environment variables.
 func GetPostgresURL() string {
 	rawURL := viper.GetString("remote.postgres_url")

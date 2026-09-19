@@ -9,22 +9,49 @@ import (
 	"github.com/spf13/viper"
 	"github.com/tsusheel/kb-cli/app"
 	"github.com/tsusheel/kb-cli/cmd"
+	"github.com/tsusheel/kb-cli/utils"
 )
 
 func resolveConfigPaths() (string, string) {
+	var customFile string
 	if envConfig := os.Getenv("KB_CONFIG"); envConfig != "" {
-		return filepath.Dir(envConfig), envConfig
-	}
-	for i, arg := range os.Args {
-		if (arg == "--config" || arg == "-c") && i+1 < len(os.Args) {
-			customFile := os.Args[i+1]
-			return filepath.Dir(customFile), customFile
+		customFile = envConfig
+	} else {
+		for i, arg := range os.Args {
+			if (arg == "--config" || arg == "-c") && i+1 < len(os.Args) {
+				customFile = os.Args[i+1]
+				break
+			}
+			if strings.HasPrefix(arg, "--config=") {
+				customFile = strings.TrimPrefix(arg, "--config=")
+				break
+			}
+			if strings.HasPrefix(arg, "-c=") {
+				customFile = strings.TrimPrefix(arg, "-c=")
+				break
+			}
 		}
-		if strings.HasPrefix(arg, "--config=") {
-			customFile := strings.TrimPrefix(arg, "--config=")
-			return filepath.Dir(customFile), customFile
-		}
 	}
+
+	if customFile != "" {
+		customFile = utils.ExpandHome(customFile)
+		// If customFile is a directory or path without extension, check if it's a directory
+		fi, err := os.Stat(customFile)
+		if err == nil && fi.IsDir() {
+			return customFile, filepath.Join(customFile, "config.yaml")
+		}
+		if !strings.HasSuffix(strings.ToLower(customFile), ".yaml") && !strings.HasSuffix(strings.ToLower(customFile), ".yml") {
+			if _, err := os.Stat(customFile); os.IsNotExist(err) && !strings.Contains(filepath.Base(customFile), ".") {
+				return customFile, filepath.Join(customFile, "config.yaml")
+			}
+		}
+		absFile, err := filepath.Abs(customFile)
+		if err == nil {
+			return filepath.Dir(absFile), absFile
+		}
+		return filepath.Dir(customFile), customFile
+	}
+
 	home, _ := os.UserHomeDir()
 	configDir := filepath.Join(home, ".config", "kb")
 	return configDir, filepath.Join(configDir, "config.yaml")

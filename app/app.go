@@ -7,10 +7,11 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/tsusheel/kb-cli/db"
+	"github.com/tsusheel/kb-cli/utils"
 )
 
 func InitApp() {
-	basePath := viper.GetString("base_path")
+	basePath := utils.ExpandHome(viper.GetString("base_path"))
 	if basePath == "" {
 		home, _ := os.UserHomeDir()
 		basePath = filepath.Join(home, ".config", "kb")
