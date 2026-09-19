@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -15,12 +16,13 @@ func InitApp() {
 		basePath = filepath.Join(home, ".config", "kb")
 	}
 
-	os.MkdirAll(basePath, 0755)
+	_ = os.MkdirAll(basePath, 0755)
 
 	dbPath := filepath.Join(basePath, "kb.db")
 
 	db.InitDB(dbPath)
 	if err := db.InitSchema(); err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "Error initializing database schema: %v\n", err)
+		os.Exit(1)
 	}
 }

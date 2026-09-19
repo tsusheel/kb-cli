@@ -4,16 +4,34 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 	"github.com/tsusheel/kb-cli/app"
 	"github.com/tsusheel/kb-cli/cmd"
 )
 
-func main() {
+func resolveConfigPaths() (string, string) {
+	if envConfig := os.Getenv("KB_CONFIG"); envConfig != "" {
+		return filepath.Dir(envConfig), envConfig
+	}
+	for i, arg := range os.Args {
+		if (arg == "--config" || arg == "-c") && i+1 < len(os.Args) {
+			customFile := os.Args[i+1]
+			return filepath.Dir(customFile), customFile
+		}
+		if strings.HasPrefix(arg, "--config=") {
+			customFile := strings.TrimPrefix(arg, "--config=")
+			return filepath.Dir(customFile), customFile
+		}
+	}
 	home, _ := os.UserHomeDir()
 	configDir := filepath.Join(home, ".config", "kb")
-	configFile := filepath.Join(configDir, "config.yaml")
+	return configDir, filepath.Join(configDir, "config.yaml")
+}
+
+func main() {
+	configDir, configFile := resolveConfigPaths()
 
 	viper.SetConfigFile(configFile)
 	viper.SetConfigType("yaml")
@@ -23,11 +41,10 @@ func main() {
 	// Try reading config
 	err := viper.ReadInConfig()
 	if err != nil {
-		fmt.Println("Config not found, creating default config...")
-
 		// 1. Create directory if not exists
-		if err := os.MkdirAll(configDir, os.ModePerm); err != nil {
-			panic(err)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating config directory %s: %v\n", configDir, err)
+			os.Exit(1)
 		}
 
 		// 2. Set default values
@@ -38,16 +55,16 @@ func main() {
 		// 3. Create the config file
 		file, err := os.Create(configFile)
 		if err != nil {
-			panic(err)
+			fmt.Fprintf(os.Stderr, "Error creating config file %s: %v\n", configFile, err)
+			os.Exit(1)
 		}
 		file.Close()
 
 		// 4. Write defaults to file
 		if err := viper.WriteConfigAs(configFile); err != nil {
-			panic(err)
+			fmt.Fprintf(os.Stderr, "Error writing config defaults to %s: %v\n", configFile, err)
+			os.Exit(1)
 		}
-
-		fmt.Println("Default config created at:", configFile)
 	}
 
 	app.InitApp()

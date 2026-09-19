@@ -14,6 +14,9 @@ var DB *sql.DB
 var schemaSQL string
 
 func InitDB(path string) {
+	if DB != nil {
+		_ = DB.Close()
+	}
 	var err error
 	DB, err = sql.Open("sqlite", path)
 	if err != nil {

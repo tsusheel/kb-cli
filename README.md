@@ -293,15 +293,48 @@ kb history diff a1b2c3d 9f8e7d6
 kb history revert a1b2c3d 9f8e7d6
 ```
 
-### 7. Linking Notes (`kb link`)
+### 7. Linking Notes & Knowledge Graph (`kb link`, `kb graph`, `kb backlinks`, `kb orphans`)
 
 ```bash
 # Create semantic relationships between notes
 kb link <from_id> <to_id> --type related_to
 kb link <from_id> <to_id> --type depends_on
+
+# View incoming backlinks pointing to a note
+kb backlinks a1b2c3d
+kb bl a1b2c3d
+
+# Visualize connected graph tree for a note (or interactive fuzzy-select)
+kb graph a1b2c3d
+kb graph
+
+# Find orphan notes with no tags and no links
+kb orphans
 ```
 
-### 8. Configuration & Secrets (`kb config`)
+### 8. Analytics Dashboard & Streaks (`kb stats`)
+
+```bash
+# View high-level metrics, activity streaks, type/status distributions, and hub notes
+kb stats
+kb summary
+```
+
+### 9. Export & Import (`kb export`, `kb import`)
+
+```bash
+# Export notes to Markdown files with Obsidian/Logseq YAML frontmatter (default to ./kb-export):
+kb export
+kb export --dir ./my-obsidian-vault
+
+# Export as full JSON dump:
+kb export --format json --dir ./backups
+
+# Batch import Markdown files from a folder (auto-extracts YAML frontmatter and titles):
+kb import --dir ./notes-folder
+```
+
+### 10. Configuration, Profiles & Secrets (`kb config`)
 
 ```bash
 # Set a public configuration value
@@ -315,9 +348,11 @@ kb config get remote.postgres_url
 kb config delete test_key
 kb config rm remote.enabled
 kb config delete --secret postgres_password
+
+# Run with a custom configuration profile (e.g. separate work & personal knowledge bases):
+kb --config ~/.config/kb-work/config.yaml ls
+KB_CONFIG=~/.config/kb-work/config.yaml kb stats
 ```
-
-
 
 ---
 
@@ -361,12 +396,27 @@ AI assistants will have access to:
 - `create_note`: Create new notes, tasks, or projects.
 - `update_note`: Update titles, bodies, types, statuses, and due dates.
 - `delete_note`: Soft-delete notes with attribution reasons.
+- `restore_note`: Restore soft-deleted notes back to active state.
 - `add_tag`: Associate tags with notes.
+- `remove_tag`: Remove tags from notes.
 - `link_notes`: Create directed semantic relationships between notes.
+- `unlink_notes`: Remove or soft-delete relationships between notes.
 - `get_daily_logs`: Retrieve daily logs for any date.
 - `create_daily_log`: Append micro-logs to the temporal stream.
 - `promote_daily_log`: Convert logs to permanent notes.
+- `restore_log`: Restore soft-deleted daily logs.
 - `get_inbox`: Fetch unrefined notes and unpromoted logs for triage.
+- `get_history`: Retrieve audit revision timeline and diff snapshots.
+- `revert_note`: Restore a note to a previous point-in-time snapshot.
+
+### Available MCP Resources & Prompts
+
+- **Resources:**
+  - `kb://today`: Real-time daily log stream recorded today.
+  - `kb://inbox`: Raw unrefined notes and unpromoted daily logs awaiting triage.
+- **Prompts:**
+  - `triage-inbox`: Standard prompt to review raw notes and propose types/tags.
+  - `daily-summary`: Prompt to synthesize today's logs into an executive summary.
 
 ---
 
