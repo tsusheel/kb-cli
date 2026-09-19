@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
 )
@@ -73,23 +72,16 @@ Examples:
 				return nil
 			}
 
-			idxs, err := fuzzyfinder.FindMulti(items, func(i int) string {
-				return items[i].FormatFuzzy()
-			}, fuzzyfinder.WithPreviewWindow(func(i int, width, height int) string {
-				if i < 0 || i >= len(items) {
-					return ""
-				}
-				return items[i].RenderPreview(width)
-			}))
+			selected, err := SelectCLIItemsMulti(items)
 			if err != nil {
-				if err == fuzzyfinder.ErrAbort {
-					return nil
-				}
 				return err
 			}
+			if len(selected) == 0 {
+				return nil
+			}
 
-			for _, idx := range idxs {
-				if err := restoreSingleItem(items[idx].ID); err != nil {
+			for _, item := range selected {
+				if err := restoreSingleItem(item.ID); err != nil {
 					return err
 				}
 			}
