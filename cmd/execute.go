@@ -19,6 +19,12 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+var configFileFlag string
+
+func init() {
+	rootCmd.PersistentFlags().StringVarP(&configFileFlag, "config", "c", "", "Path to custom config.yaml profile")
+}
+
 func isKnownCommand(arg string) bool {
 	if strings.HasPrefix(arg, "-") {
 		return true // flags like --help, -h, --version
@@ -39,11 +45,34 @@ func isKnownCommand(arg string) bool {
 	return false
 }
 
+func findFirstPositionalArg(args []string) (int, string) {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if (arg == "--config" || arg == "-c") && i+1 < len(args) {
+			i++ // skip flag argument
+			continue
+		}
+		if strings.HasPrefix(arg, "--config=") || strings.HasPrefix(arg, "-c=") {
+			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		return i, arg
+	}
+	return -1, ""
+}
+
 func Execute() {
 	args := os.Args[1:]
-	if len(args) > 0 && !isKnownCommand(args[0]) {
-		// First argument is not a known command or flag; route to 'add'
-		os.Args = append([]string{os.Args[0], "add"}, args...)
+	if posIdx, firstPos := findFirstPositionalArg(args); posIdx >= 0 && !isKnownCommand(firstPos) {
+		// Insert "add" subcommand right before the first positional argument
+		actualPos := posIdx + 1
+		newArgs := make([]string, 0, len(os.Args)+1)
+		newArgs = append(newArgs, os.Args[:actualPos]...)
+		newArgs = append(newArgs, "add")
+		newArgs = append(newArgs, os.Args[actualPos:]...)
+		os.Args = newArgs
 	}
 
 	if err := rootCmd.Execute(); err != nil {

@@ -155,6 +155,9 @@ func GetAuditHistory(entityType, entityID string, limit int) ([]models.AuditEntr
 		}
 		entries = append(entries, entry)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return entries, nil
 }
@@ -195,6 +198,9 @@ func GetRecentAuditHistory(limit int) ([]models.AuditEntry, error) {
 		}
 		entries = append(entries, entry)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return entries, nil
 }
@@ -203,6 +209,13 @@ func GetRecentAuditHistory(limit int) ([]models.AuditEntry, error) {
 func ResolveAuditID(id string) (string, error) {
 	cleanID := strings.ReplaceAll(id, "-", "")
 	if len(cleanID) == 32 {
+		var exists string
+		err := DB.QueryRow("SELECT id FROM audit_logs WHERE id = ?", cleanID).Scan(&exists)
+		if err == sql.ErrNoRows {
+			return "", ErrAuditNotFound
+		} else if err != nil {
+			return "", err
+		}
 		return cleanID, nil
 	}
 
@@ -220,6 +233,9 @@ func ResolveAuditID(id string) (string, error) {
 		if err := rows.Scan(&matchedID); err != nil {
 			return "", err
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
 	}
 
 	if count == 0 {

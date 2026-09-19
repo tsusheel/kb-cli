@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/tsusheel/kb-cli/db"
@@ -194,19 +195,15 @@ func (item CLIItem) RenderPreview(totalWidth int) string {
 func GetActiveCLIItems() ([]CLIItem, error) {
 	var items []CLIItem
 
-	// 1. Active Notes
+	// 1. Batch fetch all note tags in a single SQL query
+	tagsMap, _ := db.GetAllNoteTagsMap()
+
+	// 2. Active Notes
 	notes, err := db.ListNotes("")
 	if err != nil {
 		return nil, err
 	}
 	for _, n := range notes {
-		var tagNames []string
-		if tags, err := db.GetTagsForNote(n.ID); err == nil {
-			for _, t := range tags {
-				tagNames = append(tagNames, t.Name)
-			}
-		}
-
 		items = append(items, CLIItem{
 			ID:        n.ID,
 			Type:      string(n.Type),
@@ -214,13 +211,13 @@ func GetActiveCLIItems() ([]CLIItem, error) {
 			Area:      string(n.Area),
 			Display:   n.Note,
 			Flesh:     n.NoteFlesh,
-			Tags:      tagNames,
+			Tags:      tagsMap[n.ID],
 			Timestamp: n.UpdatedAt.Format("2006-01-02 15:04"),
 			IsLog:     false,
 		})
 	}
 
-	// 2. Active Daily Logs
+	// 3. Active Daily Logs
 	logs, err := db.GetDailyLogsFilter(nil, nil, true, false)
 	if err != nil {
 		return nil, err
@@ -246,6 +243,8 @@ func GetActiveCLIItems() ([]CLIItem, error) {
 func GetDeletedCLIItems() ([]CLIItem, error) {
 	var items []CLIItem
 
+	tagsMap, _ := db.GetAllNoteTagsMap()
+
 	// 1. Deleted Notes
 	allNotes, err := db.ListNotesExtended("", "", "", true)
 	if err != nil {
@@ -253,13 +252,6 @@ func GetDeletedCLIItems() ([]CLIItem, error) {
 	}
 	for _, n := range allNotes {
 		if !n.DeletedAt.IsZero() {
-			var tagNames []string
-			if tags, err := db.GetTagsForNote(n.ID); err == nil {
-				for _, t := range tags {
-					tagNames = append(tagNames, t.Name)
-				}
-			}
-
 			items = append(items, CLIItem{
 				ID:            n.ID,
 				Type:          string(n.Type),
@@ -267,7 +259,7 @@ func GetDeletedCLIItems() ([]CLIItem, error) {
 				Area:          string(n.Area),
 				Display:       n.Note,
 				Flesh:         n.NoteFlesh,
-				Tags:          tagNames,
+				Tags:          tagsMap[n.ID],
 				Timestamp:     n.DeletedAt.Format("2006-01-02 15:04"),
 				IsLog:         false,
 				DeletedReason: n.DeletedNote,
@@ -294,6 +286,56 @@ func GetDeletedCLIItems() ([]CLIItem, error) {
 	}
 
 	return items, nil
+}
+
+// SelectCLIItem launches the interactive fuzzy-finder with standard preview window.
+// Returns (nil, nil) if the user aborted the picker (Ctrl+C / Esc).
+func SelectCLIItem(items []CLIItem) (*CLIItem, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	idx, err := fuzzyfinder.Find(items, func(i int) string {
+		return items[i].FormatFuzzy()
+	}, fuzzyfinder.WithPreviewWindow(func(i int, width, height int) string {
+		if i < 0 || i >= len(items) {
+			return ""
+		}
+		return items[i].RenderPreview(width)
+	}))
+	if err != nil {
+		if err == fuzzyfinder.ErrAbort {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &items[idx], nil
+}
+
+// SelectCLIItemsMulti launches the interactive multi-selection fuzzy-finder with standard preview window.
+// Returns (nil, nil) if the user aborted the picker (Ctrl+C / Esc).
+func SelectCLIItemsMulti(items []CLIItem) ([]CLIItem, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	idxs, err := fuzzyfinder.FindMulti(items, func(i int) string {
+		return items[i].FormatFuzzy()
+	}, fuzzyfinder.WithPreviewWindow(func(i int, width, height int) string {
+		if i < 0 || i >= len(items) {
+			return ""
+		}
+		return items[i].RenderPreview(width)
+	}))
+	if err != nil {
+		if err == fuzzyfinder.ErrAbort {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var selected []CLIItem
+	for _, idx := range idxs {
+		selected = append(selected, items[idx])
+	}
+	return selected, nil
 }
 
 // completeNoteIDs returns active note IDs with titles as descriptions (e.g. "2d64a5a\tnew note")

@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/db"
 	"github.com/tsusheel/kb-cli/models"
@@ -72,22 +71,15 @@ Examples:
 			return nil
 		}
 
-		idx, err := fuzzyfinder.Find(items, func(i int) string {
-			return items[i].FormatFuzzy()
-		}, fuzzyfinder.WithPreviewWindow(func(i int, width, height int) string {
-			if i < 0 || i >= len(items) {
-				return ""
-			}
-			return items[i].RenderPreview(width)
-		}))
+		selected, err := SelectCLIItem(items)
 		if err != nil {
-			if err == fuzzyfinder.ErrAbort {
-				return nil
-			}
 			return err
 		}
+		if selected == nil {
+			return nil
+		}
 
-		return displayItem(items[idx].ID)
+		return displayItem(selected.ID)
 	},
 }
 

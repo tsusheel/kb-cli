@@ -32,6 +32,7 @@ func GetKnowledgeBaseStats() (*models.KBStats, error) {
 				stats.NotesByType[t] = c
 			}
 		}
+		_ = typeRows.Err()
 	}
 
 	// 3. Notes by Status
@@ -45,6 +46,7 @@ func GetKnowledgeBaseStats() (*models.KBStats, error) {
 				stats.NotesByStatus[s] = c
 			}
 		}
+		_ = statusRows.Err()
 	}
 
 	// 4. Notes by Area
@@ -58,6 +60,7 @@ func GetKnowledgeBaseStats() (*models.KBStats, error) {
 				stats.NotesByArea[a] = c
 			}
 		}
+		_ = areaRows.Err()
 	}
 
 	// 5. Daily logs total and today
@@ -87,6 +90,7 @@ func GetKnowledgeBaseStats() (*models.KBStats, error) {
 				stats.TopTags = append(stats.TopTags, tc)
 			}
 		}
+		_ = tagRows.Err()
 	}
 
 	// 7. Top Hub notes (most linked)
@@ -107,6 +111,7 @@ func GetKnowledgeBaseStats() (*models.KBStats, error) {
 				stats.TopHubNotes = append(stats.TopHubNotes, hn)
 			}
 		}
+		_ = hubRows.Err()
 	}
 
 	// 8. Daily Streak calculation (consecutive days with activity)
@@ -140,6 +145,9 @@ func calculateStreak() int {
 				dates = append(dates, t)
 			}
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0
 	}
 
 	if len(dates) == 0 {

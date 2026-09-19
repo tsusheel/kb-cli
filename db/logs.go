@@ -83,9 +83,46 @@ func UpdateDailyLog(l *models.DailyLog) error {
 }
 
 
+type logRowScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+const logColumns = "id, content, note_id, created_at, deleted_at, deleted_note"
+
+func scanLog(s logRowScanner) (*models.DailyLog, error) {
+	var l models.DailyLog
+	var noteID sql.NullString
+	var deletedAt sql.NullTime
+	var deletedNote sql.NullString
+
+	if err := s.Scan(&l.ID, &l.Content, &noteID, &l.CreatedAt, &deletedAt, &deletedNote); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrLogNotFound
+		}
+		return nil, err
+	}
+	if noteID.Valid {
+		l.NoteID = noteID.String
+	}
+	if deletedAt.Valid {
+		l.DeletedAt = deletedAt.Time
+	}
+	if deletedNote.Valid {
+		l.DeletedNote = deletedNote.String
+	}
+	return &l, nil
+}
+
 func ResolveLogID(id string) (string, error) {
 	cleanID := strings.ReplaceAll(id, "-", "")
 	if len(cleanID) == 32 {
+		var exists string
+		err := DB.QueryRow("SELECT id FROM daily_logs WHERE id = ?", cleanID).Scan(&exists)
+		if err == sql.ErrNoRows {
+			return "", ErrLogNotFound
+		} else if err != nil {
+			return "", err
+		}
 		return cleanID, nil
 	}
 
@@ -104,6 +141,9 @@ func ResolveLogID(id string) (string, error) {
 			return "", err
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
 
 	if count == 0 {
 		return "", ErrLogNotFound
@@ -121,33 +161,9 @@ func GetDailyLog(id string) (*models.DailyLog, error) {
 		return nil, err
 	}
 
-	query := `SELECT id, content, note_id, created_at, deleted_at, deleted_note FROM daily_logs WHERE id = ?`
+	query := `SELECT ` + logColumns + ` FROM daily_logs WHERE id = ?`
 	row := DB.QueryRow(query, fullID)
-
-	var l models.DailyLog
-	var noteID sql.NullString
-	var deletedAt sql.NullTime
-	var deletedNote sql.NullString
-
-	err = row.Scan(&l.ID, &l.Content, &noteID, &l.CreatedAt, &deletedAt, &deletedNote)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ErrLogNotFound
-		}
-		return nil, err
-	}
-
-	if noteID.Valid {
-		l.NoteID = noteID.String
-	}
-	if deletedAt.Valid {
-		l.DeletedAt = deletedAt.Time
-	}
-	if deletedNote.Valid {
-		l.DeletedNote = deletedNote.String
-	}
-
-	return &l, nil
+	return scanLog(row)
 }
 
 // GetDailyLogsFilter queries daily logs with optional date range, promotion status, and soft-delete filters.
@@ -175,7 +191,7 @@ func GetDailyLogsFilter(startDate, endDate *time.Time, includePromoted bool, inc
 		args = append(args, endOfDay)
 	}
 
-	query := `SELECT id, content, note_id, created_at, deleted_at, deleted_note FROM daily_logs`
+	query := `SELECT ` + logColumns + ` FROM daily_logs`
 	if len(whereClauses) > 0 {
 		query += ` WHERE ` + strings.Join(whereClauses, " AND ")
 	}
@@ -189,24 +205,14 @@ func GetDailyLogsFilter(startDate, endDate *time.Time, includePromoted bool, inc
 
 	var logs []models.DailyLog
 	for rows.Next() {
-		var l models.DailyLog
-		var noteID sql.NullString
-		var deletedAt sql.NullTime
-		var deletedNote sql.NullString
-
-		if err := rows.Scan(&l.ID, &l.Content, &noteID, &l.CreatedAt, &deletedAt, &deletedNote); err != nil {
+		l, err := scanLog(rows)
+		if err != nil {
 			return nil, err
 		}
-		if noteID.Valid {
-			l.NoteID = noteID.String
-		}
-		if deletedAt.Valid {
-			l.DeletedAt = deletedAt.Time
-		}
-		if deletedNote.Valid {
-			l.DeletedNote = deletedNote.String
-		}
-		logs = append(logs, l)
+		logs = append(logs, *l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return logs, nil
@@ -217,7 +223,7 @@ func GetDailyLogsForDate(date time.Time, includePromoted bool) ([]models.DailyLo
 }
 
 func GetUnpromotedDailyLogs() ([]models.DailyLog, error) {
-	query := `SELECT id, content, note_id, created_at, deleted_at, deleted_note FROM daily_logs WHERE (note_id IS NULL OR note_id = '') AND deleted_at IS NULL ORDER BY created_at DESC`
+	query := `SELECT ` + logColumns + ` FROM daily_logs WHERE (note_id IS NULL OR note_id = '') AND deleted_at IS NULL ORDER BY created_at DESC`
 	rows, err := DB.Query(query)
 	if err != nil {
 		return nil, err
@@ -226,24 +232,14 @@ func GetUnpromotedDailyLogs() ([]models.DailyLog, error) {
 
 	var logs []models.DailyLog
 	for rows.Next() {
-		var l models.DailyLog
-		var noteID sql.NullString
-		var deletedAt sql.NullTime
-		var deletedNote sql.NullString
-
-		if err := rows.Scan(&l.ID, &l.Content, &noteID, &l.CreatedAt, &deletedAt, &deletedNote); err != nil {
+		l, err := scanLog(rows)
+		if err != nil {
 			return nil, err
 		}
-		if noteID.Valid {
-			l.NoteID = noteID.String
-		}
-		if deletedAt.Valid {
-			l.DeletedAt = deletedAt.Time
-		}
-		if deletedNote.Valid {
-			l.DeletedNote = deletedNote.String
-		}
-		logs = append(logs, l)
+		logs = append(logs, *l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return logs, nil

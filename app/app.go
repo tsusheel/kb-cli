@@ -20,7 +20,10 @@ func InitApp() {
 
 	dbPath := filepath.Join(basePath, "kb.db")
 
-	db.InitDB(dbPath)
+	if err := db.InitDB(dbPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing database at %s: %v\n", dbPath, err)
+		os.Exit(1)
+	}
 	if err := db.InitSchema(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing database schema: %v\n", err)
 		os.Exit(1)

@@ -70,6 +70,26 @@ func RemoveLink(fromID, toID string, reason string) error {
 	return nil
 }
 
+func scanLink(s rowScanner) (*models.Link, error) {
+	var l models.Link
+	var createdAt sql.NullTime
+	var deletedAt sql.NullTime
+	var deletedNote sql.NullString
+	if err := s.Scan(&l.ID, &l.FromNote, &l.ToNote, &l.Type, &createdAt, &deletedAt, &deletedNote); err != nil {
+		return nil, err
+	}
+	if createdAt.Valid {
+		l.CreatedAt = createdAt.Time
+	}
+	if deletedAt.Valid {
+		l.DeletedAt = deletedAt.Time
+	}
+	if deletedNote.Valid {
+		l.DeletedNote = deletedNote.String
+	}
+	return &l, nil
+}
+
 func GetLinksForNote(noteID string) ([]models.Link, error) {
 	fullNoteID, err := ResolveID(noteID)
 	if err != nil {
@@ -85,23 +105,14 @@ func GetLinksForNote(noteID string) ([]models.Link, error) {
 
 	var links []models.Link
 	for rows.Next() {
-		var l models.Link
-		var createdAt sql.NullTime
-		var deletedAt sql.NullTime
-		var deletedNote sql.NullString
-		if err := rows.Scan(&l.ID, &l.FromNote, &l.ToNote, &l.Type, &createdAt, &deletedAt, &deletedNote); err != nil {
+		l, err := scanLink(rows)
+		if err != nil {
 			return nil, err
 		}
-		if createdAt.Valid {
-			l.CreatedAt = createdAt.Time
-		}
-		if deletedAt.Valid {
-			l.DeletedAt = deletedAt.Time
-		}
-		if deletedNote.Valid {
-			l.DeletedNote = deletedNote.String
-		}
-		links = append(links, l)
+		links = append(links, *l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return links, nil
@@ -122,23 +133,14 @@ func GetIncomingLinks(noteID string) ([]models.Link, error) {
 
 	var links []models.Link
 	for rows.Next() {
-		var l models.Link
-		var createdAt sql.NullTime
-		var deletedAt sql.NullTime
-		var deletedNote sql.NullString
-		if err := rows.Scan(&l.ID, &l.FromNote, &l.ToNote, &l.Type, &createdAt, &deletedAt, &deletedNote); err != nil {
+		l, err := scanLink(rows)
+		if err != nil {
 			return nil, err
 		}
-		if createdAt.Valid {
-			l.CreatedAt = createdAt.Time
-		}
-		if deletedAt.Valid {
-			l.DeletedAt = deletedAt.Time
-		}
-		if deletedNote.Valid {
-			l.DeletedNote = deletedNote.String
-		}
-		links = append(links, l)
+		links = append(links, *l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return links, nil
@@ -159,23 +161,14 @@ func GetOutgoingLinks(noteID string) ([]models.Link, error) {
 
 	var links []models.Link
 	for rows.Next() {
-		var l models.Link
-		var createdAt sql.NullTime
-		var deletedAt sql.NullTime
-		var deletedNote sql.NullString
-		if err := rows.Scan(&l.ID, &l.FromNote, &l.ToNote, &l.Type, &createdAt, &deletedAt, &deletedNote); err != nil {
+		l, err := scanLink(rows)
+		if err != nil {
 			return nil, err
 		}
-		if createdAt.Valid {
-			l.CreatedAt = createdAt.Time
-		}
-		if deletedAt.Valid {
-			l.DeletedAt = deletedAt.Time
-		}
-		if deletedNote.Valid {
-			l.DeletedNote = deletedNote.String
-		}
-		links = append(links, l)
+		links = append(links, *l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return links, nil
@@ -191,23 +184,14 @@ func GetAllActiveLinks() ([]models.Link, error) {
 
 	var links []models.Link
 	for rows.Next() {
-		var l models.Link
-		var createdAt sql.NullTime
-		var deletedAt sql.NullTime
-		var deletedNote sql.NullString
-		if err := rows.Scan(&l.ID, &l.FromNote, &l.ToNote, &l.Type, &createdAt, &deletedAt, &deletedNote); err != nil {
+		l, err := scanLink(rows)
+		if err != nil {
 			return nil, err
 		}
-		if createdAt.Valid {
-			l.CreatedAt = createdAt.Time
-		}
-		if deletedAt.Valid {
-			l.DeletedAt = deletedAt.Time
-		}
-		if deletedNote.Valid {
-			l.DeletedNote = deletedNote.String
-		}
-		links = append(links, l)
+		links = append(links, *l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return links, nil

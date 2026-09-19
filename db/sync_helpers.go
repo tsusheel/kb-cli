@@ -13,9 +13,9 @@ func GetAllNotesSince(since time.Time) ([]models.Note, error) {
 	var args []interface{}
 
 	if since.IsZero() {
-		query = `SELECT id, note, note_flesh, type, status, area, importance, clarity, source, target_date_time, created_at, updated_at, deleted_at, deleted_note FROM notes`
+		query = `SELECT ` + noteColumns + ` FROM notes`
 	} else {
-		query = `SELECT id, note, note_flesh, type, status, area, importance, clarity, source, target_date_time, created_at, updated_at, deleted_at, deleted_note FROM notes WHERE updated_at > ? OR (deleted_at IS NOT NULL AND deleted_at > ?)`
+		query = `SELECT ` + noteColumns + ` FROM notes WHERE updated_at > ? OR (deleted_at IS NOT NULL AND deleted_at > ?)`
 		args = []interface{}{since, since}
 	}
 
@@ -27,23 +27,14 @@ func GetAllNotesSince(since time.Time) ([]models.Note, error) {
 
 	var notes []models.Note
 	for rows.Next() {
-		var n models.Note
-		var targetDT sql.NullTime
-		var deletedDT sql.NullTime
-		var deletedNote sql.NullString
-		if err := rows.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &n.Importance, &n.Clarity, &n.Source, &targetDT, &n.CreatedAt, &n.UpdatedAt, &deletedDT, &deletedNote); err != nil {
+		n, err := scanNote(rows)
+		if err != nil {
 			return nil, err
 		}
-		if targetDT.Valid {
-			n.TargetDateTime = targetDT.Time
-		}
-		if deletedDT.Valid {
-			n.DeletedAt = deletedDT.Time
-		}
-		if deletedNote.Valid {
-			n.DeletedNote = deletedNote.String
-		}
-		notes = append(notes, n)
+		notes = append(notes, *n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return notes, nil
@@ -79,6 +70,9 @@ func GetAllTagsSince(since time.Time) ([]models.Tag, error) {
 		}
 		tags = append(tags, t)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return tags, nil
 }
 
@@ -112,6 +106,9 @@ func GetAllNoteTagsSince(since time.Time) ([]models.NoteTag, error) {
 		}
 		noteTags = append(noteTags, nt)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return noteTags, nil
 }
 
@@ -135,23 +132,14 @@ func GetAllLinksSince(since time.Time) ([]models.Link, error) {
 
 	var links []models.Link
 	for rows.Next() {
-		var l models.Link
-		var createdAt sql.NullTime
-		var deletedAt sql.NullTime
-		var deletedNote sql.NullString
-		if err := rows.Scan(&l.ID, &l.FromNote, &l.ToNote, &l.Type, &createdAt, &deletedAt, &deletedNote); err != nil {
+		l, err := scanLink(rows)
+		if err != nil {
 			return nil, err
 		}
-		if createdAt.Valid {
-			l.CreatedAt = createdAt.Time
-		}
-		if deletedAt.Valid {
-			l.DeletedAt = deletedAt.Time
-		}
-		if deletedNote.Valid {
-			l.DeletedNote = deletedNote.String
-		}
-		links = append(links, l)
+		links = append(links, *l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return links, nil
 }
@@ -162,9 +150,9 @@ func GetAllDailyLogsSince(since time.Time) ([]models.DailyLog, error) {
 	var args []interface{}
 
 	if since.IsZero() {
-		query = `SELECT id, content, note_id, created_at, deleted_at, deleted_note FROM daily_logs`
+		query = `SELECT ` + logColumns + ` FROM daily_logs`
 	} else {
-		query = `SELECT id, content, note_id, created_at, deleted_at, deleted_note FROM daily_logs WHERE created_at > ? OR (deleted_at IS NOT NULL AND deleted_at > ?)`
+		query = `SELECT ` + logColumns + ` FROM daily_logs WHERE created_at > ? OR (deleted_at IS NOT NULL AND deleted_at > ?)`
 		args = []interface{}{since, since}
 	}
 
@@ -176,23 +164,14 @@ func GetAllDailyLogsSince(since time.Time) ([]models.DailyLog, error) {
 
 	var logs []models.DailyLog
 	for rows.Next() {
-		var l models.DailyLog
-		var noteID sql.NullString
-		var deletedAt sql.NullTime
-		var deletedNote sql.NullString
-		if err := rows.Scan(&l.ID, &l.Content, &noteID, &l.CreatedAt, &deletedAt, &deletedNote); err != nil {
+		l, err := scanLog(rows)
+		if err != nil {
 			return nil, err
 		}
-		if noteID.Valid {
-			l.NoteID = noteID.String
-		}
-		if deletedAt.Valid {
-			l.DeletedAt = deletedAt.Time
-		}
-		if deletedNote.Valid {
-			l.DeletedNote = deletedNote.String
-		}
-		logs = append(logs, l)
+		logs = append(logs, *l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return logs, nil
 }
@@ -348,6 +327,9 @@ func GetAllAuditLogsSince(since time.Time) ([]models.AuditEntry, error) {
 			entry.SnapshotJSON = snapshot.String
 		}
 		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return entries, nil

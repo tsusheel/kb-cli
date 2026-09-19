@@ -63,9 +63,60 @@ func CreateNote(n *models.Note) error {
 	return tx.Commit()
 }
 
+type rowScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+const noteColumns = "id, note, note_flesh, type, status, area, importance, clarity, source, target_date_time, created_at, updated_at, deleted_at, deleted_note"
+
+func scanNote(s rowScanner) (*models.Note, error) {
+	var n models.Note
+	var targetDT sql.NullTime
+	var deletedDT sql.NullTime
+	var deletedNote sql.NullString
+
+	err := s.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &n.Importance, &n.Clarity, &n.Source, &targetDT, &n.CreatedAt, &n.UpdatedAt, &deletedDT, &deletedNote)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if targetDT.Valid {
+		n.TargetDateTime = targetDT.Time
+	}
+	if deletedDT.Valid {
+		n.DeletedAt = deletedDT.Time
+	}
+	if deletedNote.Valid {
+		n.DeletedNote = deletedNote.String
+	}
+	return &n, nil
+}
+
+func prefixedNoteColumns(prefix string) string {
+	cols := []string{
+		"id", "note", "note_flesh", "type", "status", "area",
+		"importance", "clarity", "source", "target_date_time",
+		"created_at", "updated_at", "deleted_at", "deleted_note",
+	}
+	var prefixed []string
+	for _, c := range cols {
+		prefixed = append(prefixed, prefix+"."+c)
+	}
+	return strings.Join(prefixed, ", ")
+}
+
 func ResolveID(id string) (string, error) {
 	cleanID := strings.ReplaceAll(id, "-", "")
 	if len(cleanID) == 32 {
+		var exists string
+		err := DB.QueryRow("SELECT id FROM notes WHERE id = ?", cleanID).Scan(&exists)
+		if err == sql.ErrNoRows {
+			return "", ErrNotFound
+		} else if err != nil {
+			return "", err
+		}
 		return cleanID, nil
 	}
 
@@ -84,6 +135,9 @@ func ResolveID(id string) (string, error) {
 			return "", err
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
 
 	if count == 0 {
 		return "", ErrNotFound
@@ -101,31 +155,9 @@ func GetNote(id string) (*models.Note, error) {
 		return nil, err
 	}
 
-	query := `SELECT id, note, note_flesh, type, status, area, importance, clarity, source, target_date_time, created_at, updated_at, deleted_at, deleted_note FROM notes WHERE id = ?`
+	query := `SELECT ` + noteColumns + ` FROM notes WHERE id = ?`
 	row := DB.QueryRow(query, fullID)
-
-	var n models.Note
-	var targetDT sql.NullTime
-	var deletedDT sql.NullTime
-	var deletedNote sql.NullString
-	err = row.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &n.Importance, &n.Clarity, &n.Source, &targetDT, &n.CreatedAt, &n.UpdatedAt, &deletedDT, &deletedNote)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ErrNotFound
-		}
-		return nil, err
-	}
-	if targetDT.Valid {
-		n.TargetDateTime = targetDT.Time
-	}
-	if deletedDT.Valid {
-		n.DeletedAt = deletedDT.Time
-	}
-	if deletedNote.Valid {
-		n.DeletedNote = deletedNote.String
-	}
-
-	return &n, nil
+	return scanNote(row)
 }
 
 func UpdateNote(n *models.Note) error {
@@ -290,7 +322,7 @@ func ListNotesExtended(filterType, filterStatus, filterArea string, includeDelet
 		args = append(args, filterArea)
 	}
 
-	query := "SELECT id, note, note_flesh, type, status, area, target_date_time, created_at, updated_at, deleted_at, deleted_note FROM notes"
+	query := "SELECT " + noteColumns + " FROM notes"
 	if len(whereClauses) > 0 {
 		query += " WHERE " + strings.Join(whereClauses, " AND ")
 	}
@@ -304,24 +336,14 @@ func ListNotesExtended(filterType, filterStatus, filterArea string, includeDelet
 
 	var notes []models.Note
 	for rows.Next() {
-		var n models.Note
-		var targetDT sql.NullTime
-		var deletedDT sql.NullTime
-		var deletedNote sql.NullString
-		err := rows.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt, &deletedDT, &deletedNote)
+		n, err := scanNote(rows)
 		if err != nil {
 			return nil, err
 		}
-		if targetDT.Valid {
-			n.TargetDateTime = targetDT.Time
-		}
-		if deletedDT.Valid {
-			n.DeletedAt = deletedDT.Time
-		}
-		if deletedNote.Valid {
-			n.DeletedNote = deletedNote.String
-		}
-		notes = append(notes, n)
+		notes = append(notes, *n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return notes, nil
@@ -389,12 +411,12 @@ func SearchNotesExtended(searchTerm, filterType, filterStatus, filterArea string
 	}
 
 	query := fmt.Sprintf(`
-		SELECT n.id, n.note, n.note_flesh, n.type, n.status, n.area, n.target_date_time, n.created_at, n.updated_at 
+		SELECT %s 
 		FROM notes_fts fts
 		JOIN notes n ON n.id = fts.note_id
 		WHERE %s
 		ORDER BY rank
-	`, strings.Join(whereClauses, " AND "))
+	`, prefixedNoteColumns("n"), strings.Join(whereClauses, " AND "))
 
 	rows, err := DB.Query(query, args...)
 	if err != nil {
@@ -404,16 +426,14 @@ func SearchNotesExtended(searchTerm, filterType, filterStatus, filterArea string
 
 	var notes []models.Note
 	for rows.Next() {
-		var n models.Note
-		var targetDT sql.NullTime
-		err := rows.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt)
+		n, err := scanNote(rows)
 		if err != nil {
 			return nil, err
 		}
-		if targetDT.Valid {
-			n.TargetDateTime = targetDT.Time
-		}
-		notes = append(notes, n)
+		notes = append(notes, *n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return notes, nil
@@ -422,7 +442,6 @@ func SearchNotesExtended(searchTerm, filterType, filterStatus, filterArea string
 func SearchNotes(searchTerm string) ([]models.Note, error) {
 	return SearchNotesExtended(searchTerm, "", "", "")
 }
-
 
 // GetRawNotes returns raw unrefined notes for today (todayOnly=true) or all time (todayOnly=false).
 func GetRawNotes(todayOnly bool) ([]models.Note, error) {
@@ -434,16 +453,10 @@ func GetRawNotes(todayOnly bool) ([]models.Note, error) {
 		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		endOfDay := startOfDay.AddDate(0, 0, 1)
 
-		query = `SELECT id, note, note_flesh, type, status, area, target_date_time, created_at, updated_at, deleted_at, deleted_note 
-		         FROM notes 
-		         WHERE status = 'raw' AND deleted_at IS NULL AND created_at >= ? AND created_at < ? 
-		         ORDER BY updated_at DESC`
+		query = fmt.Sprintf("SELECT %s FROM notes WHERE status = 'raw' AND deleted_at IS NULL AND created_at >= ? AND created_at < ? ORDER BY updated_at DESC", noteColumns)
 		args = []interface{}{startOfDay, endOfDay}
 	} else {
-		query = `SELECT id, note, note_flesh, type, status, area, target_date_time, created_at, updated_at, deleted_at, deleted_note 
-		         FROM notes 
-		         WHERE status = 'raw' AND deleted_at IS NULL 
-		         ORDER BY updated_at DESC`
+		query = fmt.Sprintf("SELECT %s FROM notes WHERE status = 'raw' AND deleted_at IS NULL ORDER BY updated_at DESC", noteColumns)
 	}
 
 	rows, err := DB.Query(query, args...)
@@ -454,24 +467,14 @@ func GetRawNotes(todayOnly bool) ([]models.Note, error) {
 
 	var notes []models.Note
 	for rows.Next() {
-		var n models.Note
-		var targetDT sql.NullTime
-		var deletedDT sql.NullTime
-		var deletedNote sql.NullString
-		err := rows.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt, &deletedDT, &deletedNote)
+		n, err := scanNote(rows)
 		if err != nil {
 			return nil, err
 		}
-		if targetDT.Valid {
-			n.TargetDateTime = targetDT.Time
-		}
-		if deletedDT.Valid {
-			n.DeletedAt = deletedDT.Time
-		}
-		if deletedNote.Valid {
-			n.DeletedNote = deletedNote.String
-		}
-		notes = append(notes, n)
+		notes = append(notes, *n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return notes, nil
@@ -479,15 +482,16 @@ func GetRawNotes(todayOnly bool) ([]models.Note, error) {
 
 // GetOrphanNotes returns active notes that have no associated tags and no incoming or outgoing links.
 func GetOrphanNotes() ([]models.Note, error) {
-	query := `
-		SELECT n.id, n.note, n.note_flesh, n.type, n.status, n.area, n.target_date_time, n.created_at, n.updated_at, n.deleted_at, n.deleted_note
+	query := fmt.Sprintf(`
+		SELECT %s
 		FROM notes n
 		WHERE n.deleted_at IS NULL
 		  AND n.id NOT IN (SELECT note_id FROM note_tags)
 		  AND n.id NOT IN (SELECT from_note FROM links WHERE deleted_at IS NULL)
 		  AND n.id NOT IN (SELECT to_note FROM links WHERE deleted_at IS NULL)
 		ORDER BY n.updated_at DESC
-	`
+	`, prefixedNoteColumns("n"))
+
 	rows, err := DB.Query(query)
 	if err != nil {
 		return nil, err
@@ -496,24 +500,14 @@ func GetOrphanNotes() ([]models.Note, error) {
 
 	var notes []models.Note
 	for rows.Next() {
-		var n models.Note
-		var targetDT sql.NullTime
-		var deletedDT sql.NullTime
-		var deletedNote sql.NullString
-		err := rows.Scan(&n.ID, &n.Note, &n.NoteFlesh, &n.Type, &n.Status, &n.Area, &targetDT, &n.CreatedAt, &n.UpdatedAt, &deletedDT, &deletedNote)
+		n, err := scanNote(rows)
 		if err != nil {
 			return nil, err
 		}
-		if targetDT.Valid {
-			n.TargetDateTime = targetDT.Time
-		}
-		if deletedDT.Valid {
-			n.DeletedAt = deletedDT.Time
-		}
-		if deletedNote.Valid {
-			n.DeletedNote = deletedNote.String
-		}
-		notes = append(notes, n)
+		notes = append(notes, *n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return notes, nil

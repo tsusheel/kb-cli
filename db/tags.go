@@ -76,8 +76,40 @@ func GetTagsForNote(noteID string) ([]models.Tag, error) {
 		}
 		tags = append(tags, t)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return tags, nil
+}
+
+// GetAllNoteTagsMap fetches a map of Note ID -> slice of Tag Names in a single efficient SQL query.
+func GetAllNoteTagsMap() (map[string][]string, error) {
+	query := `
+		SELECT nt.note_id, t.name 
+		FROM note_tags nt
+		JOIN tags t ON nt.tag_id = t.id
+		ORDER BY nt.created_at ASC
+	`
+	rows, err := DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tagsMap := make(map[string][]string)
+	for rows.Next() {
+		var noteID, tagName string
+		if err := rows.Scan(&noteID, &tagName); err != nil {
+			return nil, err
+		}
+		tagsMap[noteID] = append(tagsMap[noteID], tagName)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return tagsMap, nil
 }
 
 func RemoveTag(noteID string, tagName string) error {
