@@ -200,6 +200,7 @@ func (c *PostgresClient) PushLocalChanges(since time.Time) (*SyncStats, error) {
 				updated_at = EXCLUDED.updated_at,
 				deleted_at = EXCLUDED.deleted_at,
 				deleted_note = EXCLUDED.deleted_note
+			WHERE EXCLUDED.updated_at >= notes.updated_at OR notes.updated_at IS NULL
 		`
 		_, err := c.DB.Exec(query, n.ID, n.Note, n.NoteFlesh, string(n.Type), string(n.Status), string(n.Area), n.Importance, n.Clarity, n.Source, targetDT, n.CreatedAt, n.UpdatedAt, deletedDT, n.DeletedNote)
 		if err != nil {
@@ -264,6 +265,8 @@ func (c *PostgresClient) PushLocalChanges(since time.Time) (*SyncStats, error) {
 				created_at = EXCLUDED.created_at,
 				deleted_at = EXCLUDED.deleted_at,
 				deleted_note = EXCLUDED.deleted_note
+			WHERE (EXCLUDED.deleted_at IS NOT NULL AND (links.deleted_at IS NULL OR EXCLUDED.deleted_at >= links.deleted_at))
+			   OR (EXCLUDED.created_at >= links.created_at OR links.created_at IS NULL)
 		`
 		_, err := c.DB.Exec(query, l.ID, l.FromNote, l.ToNote, string(l.Type), l.CreatedAt, deletedDT, l.DeletedNote)
 		if err != nil {
@@ -296,6 +299,8 @@ func (c *PostgresClient) PushLocalChanges(since time.Time) (*SyncStats, error) {
 				created_at = EXCLUDED.created_at,
 				deleted_at = EXCLUDED.deleted_at,
 				deleted_note = EXCLUDED.deleted_note
+			WHERE (EXCLUDED.deleted_at IS NOT NULL AND (daily_logs.deleted_at IS NULL OR EXCLUDED.deleted_at >= daily_logs.deleted_at))
+			   OR (EXCLUDED.created_at >= daily_logs.created_at OR daily_logs.created_at IS NULL)
 		`
 		_, err := c.DB.Exec(query, l.ID, l.Content, noteID, l.CreatedAt, deletedDT, l.DeletedNote)
 		if err != nil {
