@@ -43,9 +43,13 @@ func Start(cfg Config) error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	url := fmt.Sprintf("http://%s:%d", cfg.Host, cfg.Port)
-	if cfg.Host == "0.0.0.0" {
-		url = fmt.Sprintf("http://127.0.0.1:%d", cfg.Port)
+	host := cfg.Host
+	if host == "0.0.0.0" {
+		host = "127.0.0.1"
+	}
+	url := fmt.Sprintf("http://%s:%d", host, cfg.Port)
+	if cfg.Port == 80 {
+		url = fmt.Sprintf("http://%s/", host)
 	}
 
 	fmt.Println()

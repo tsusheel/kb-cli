@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/tsusheel/kb-cli/mcp"
 	"github.com/tsusheel/kb-cli/server"
 )
@@ -50,9 +51,17 @@ Examples:
   kb serve http --port 3000 --open
   kb serve web -p 8080 -o`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		port := serveHTTPPort
+		if !cmd.Flags().Changed("port") && viper.IsSet("server.port") {
+			port = viper.GetInt("server.port")
+		}
+		host := serveHTTPHost
+		if !cmd.Flags().Changed("host") && viper.IsSet("server.host") {
+			host = viper.GetString("server.host")
+		}
 		cfg := server.Config{
-			Host:        serveHTTPHost,
-			Port:        serveHTTPPort,
+			Host:        host,
+			Port:        port,
 			OpenBrowser: serveHTTPOpen,
 		}
 		return server.Start(cfg)
