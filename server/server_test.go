@@ -37,8 +37,11 @@ func TestServerStaticRoutes(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200 for /, got %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "KB Finder") {
+	if !strings.Contains(rec.Body.String(), "<title>KB</title>") {
 		t.Errorf("index.html missing expected title text: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "id=\"sync-btn\"") {
+		t.Errorf("index.html missing sync button: %s", rec.Body.String())
 	}
 
 	// 2. Test style.css
@@ -195,5 +198,17 @@ func TestServerAPIRoutes(t *testing.T) {
 
 	if recRestore.Code != http.StatusOK {
 		t.Fatalf("expected 200 for POST /api/notes/{id}/restore, got %d", recRestore.Code)
+	}
+
+	// 10. Test POST /api/sync (local mode fallback)
+	reqSync := httptest.NewRequest(http.MethodPost, "/api/sync", nil)
+	recSync := httptest.NewRecorder()
+	handler.ServeHTTP(recSync, reqSync)
+
+	if recSync.Code != http.StatusOK {
+		t.Fatalf("expected 200 for POST /api/sync, got %d: %s", recSync.Code, recSync.Body.String())
+	}
+	if !strings.Contains(recSync.Body.String(), "success") {
+		t.Errorf("expected success in sync response: %s", recSync.Body.String())
 	}
 }

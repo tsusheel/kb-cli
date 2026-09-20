@@ -38,7 +38,7 @@
   const tagPills = document.getElementById('tag-pills');
   const footerStats = document.getElementById('footer-stats');
   const newNoteBtn = document.getElementById('new-note-btn');
-  const refreshBtn = document.getElementById('refresh-btn');
+  const syncBtn = document.getElementById('sync-btn');
   const copyIdBtn = document.getElementById('copy-id-btn');
   const toggleStatusBtn = document.getElementById('toggle-status-btn');
   const editNoteBtn = document.getElementById('edit-note-btn');
@@ -110,10 +110,30 @@
 
     // Header Actions
     newNoteBtn.addEventListener('click', () => openNoteModal());
-    refreshBtn.addEventListener('click', async () => {
-      await loadData();
-      showToast('Data refreshed');
-    });
+    if (syncBtn) {
+      syncBtn.addEventListener('click', async () => {
+        syncBtn.classList.add('syncing');
+        syncBtn.textContent = 'Syncing...';
+        showToast('Syncing data...');
+        try {
+          const res = await fetch('/api/sync', { method: 'POST' });
+          const data = await res.json();
+          if (data.success) {
+            showToast(data.message || 'Sync complete');
+          } else {
+            showToast(`Sync failed: ${data.error || 'unknown error'}`);
+          }
+        } catch (err) {
+          showToast(`Sync error: ${err.message}`);
+        } finally {
+          syncBtn.classList.remove('syncing');
+          syncBtn.textContent = 'Sync';
+          await loadData();
+          await loadTags();
+          await loadStats();
+        }
+      });
+    }
 
     // Preview Actions
     copyIdBtn.addEventListener('click', () => {
@@ -270,7 +290,7 @@
       const stats = await res.json();
       if (stats) {
         const streak = stats.consecutive_streak_days || 0;
-        footerStats.textContent = `Active Notes: ${stats.total_active_notes || 0} • Daily Logs: ${stats.total_daily_logs || 0} • Streak: ${streak}d 🔥`;
+        footerStats.textContent = `${stats.total_active_notes || 0} notes · ${stats.total_daily_logs || 0} logs · ${streak}d streak`;
       }
     } catch (err) {
       console.error(err);
@@ -529,6 +549,7 @@
     previewGraphSection.style.display = 'none';
     previewHistorySection.style.display = 'none';
 
+    toggleStatusBtn.textContent = item.status === 'completed' ? 'Reopen' : 'Done';
     toggleStatusBtn.style.display = (item.type === 'todo' || item.type === 'project') ? 'inline-flex' : 'none';
     editNoteBtn.style.display = item.is_log ? 'none' : 'inline-flex';
   }
@@ -550,7 +571,7 @@
       previewGraphSection.style.display = 'block';
       previewLinksList.innerHTML = note.links.map(l => `
         <div class="link-row" data-note-id="${escapeHtml(l.other_note_id)}">
-          <span class="link-arrow">${l.direction === 'outgoing' ? '➔' : '⬅'}</span>
+          <span class="link-arrow">${l.direction === 'outgoing' ? '→' : '←'}</span>
           <span class="link-type">[${escapeHtml(l.type)}]</span>
           <span class="link-title">${escapeHtml(l.other_note || l.other_note_id.substring(0, 7))}</span>
         </div>

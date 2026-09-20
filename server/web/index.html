@@ -3,51 +3,38 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KB — Knowledge Base Fuzzy Finder</title>
+  <title>KB</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <div id="app" class="app-layout">
-    <!-- Top Command & Search Bar -->
+    <!-- Sleek Minimal Header -->
     <header class="app-header">
-      <div class="logo-area">
-        <div class="logo-icon">📦</div>
-        <div class="logo-text">
-          <span class="logo-title">KB Finder</span>
-          <span id="active-profile" class="logo-badge">local</span>
-        </div>
-      </div>
-
       <div class="search-container">
         <div class="search-input-wrapper">
-          <span class="search-icon">🔍</span>
           <input 
             type="text" 
             id="search-input" 
-            placeholder="Type to fuzzy search notes, todos, projects, tags... (Press '/' to focus)" 
+            placeholder="Search (/ to focus)" 
             autocomplete="off" 
             spellcheck="false"
             autofocus
           >
-          <button id="clear-search-btn" class="btn-icon" title="Clear search (Esc)" style="display: none;">✕</button>
-          <div class="search-count-badge" id="search-count">0 items</div>
+          <button id="clear-search-btn" class="btn-clear" title="Clear (Esc)" style="display: none;">✕</button>
+          <span class="search-count-badge" id="search-count">0</span>
         </div>
       </div>
 
       <div class="header-actions">
-        <button id="new-note-btn" class="btn btn-primary" title="New Note (Ctrl+N or N)">
-          <span class="btn-icon-plus">+</span> New Note
-        </button>
-        <button id="refresh-btn" class="btn btn-secondary btn-icon-only" title="Refresh data (Ctrl+R)">
-          🔄
-        </button>
+        <button id="new-note-btn" class="btn btn-primary" title="New Note (N)">+ New</button>
+        <button id="sync-btn" class="btn btn-secondary" title="Sync Database">Sync</button>
       </div>
     </header>
 
-    <!-- Filter Pills Bar -->
+    <!-- Minimal Filter Bar -->
     <nav class="filter-bar">
       <div class="filter-pills" id="type-filter-pills">
         <button class="pill active" data-filter="all">All <span class="pill-count" id="count-all">0</span></button>
@@ -55,37 +42,28 @@
         <button class="pill" data-filter="todo">Todos <span class="pill-count" id="count-todo">0</span></button>
         <button class="pill" data-filter="project">Projects <span class="pill-count" id="count-project">0</span></button>
         <button class="pill" data-filter="idea">Ideas <span class="pill-count" id="count-idea">0</span></button>
-        <button class="pill" data-filter="log">Daily Logs <span class="pill-count" id="count-log">0</span></button>
-        <button class="pill pill-archive" data-filter="archived">Deleted / Archive <span class="pill-count" id="count-archived">0</span></button>
+        <button class="pill" data-filter="log">Logs <span class="pill-count" id="count-log">0</span></button>
+        <button class="pill pill-archive" data-filter="archived">Archive <span class="pill-count" id="count-archived">0</span></button>
       </div>
 
       <div class="tag-filter-container">
-        <div class="tag-scroll-area" id="tag-pills">
-          <!-- Dynamic Tag Pills -->
-        </div>
+        <div class="tag-scroll-area" id="tag-pills"></div>
       </div>
     </nav>
 
-    <!-- Main Dual-Pane Content -->
+    <!-- Main Dual-Pane View -->
     <main class="main-split-container">
-      <!-- Left Pane: Fuzzy Results List -->
+      <!-- Left: Fuzzy Results List -->
       <section class="results-pane" id="results-pane">
-        <div class="pane-header">
-          <span class="pane-title">Matching Items</span>
-          <span class="pane-subtitle" id="sort-info">Ranked by relevance</span>
-        </div>
         <div class="results-list" id="results-list" tabindex="0">
-          <!-- Rendered Search Items -->
-          <div class="loading-state">Loading knowledge base...</div>
+          <div class="loading-state">Loading...</div>
         </div>
       </section>
 
-      <!-- Right Pane: Live Preview -->
+      <!-- Right: Live Preview -->
       <section class="preview-pane" id="preview-pane">
         <div id="preview-empty" class="preview-empty-state">
-          <div class="empty-icon">📂</div>
-          <div class="empty-title">Select an item to preview</div>
-          <div class="empty-desc">Use <kbd>↑</kbd> <kbd>↓</kbd> or <kbd>j</kbd> <kbd>k</kbd> to navigate through notes</div>
+          <div class="empty-title">Select a note to preview</div>
         </div>
 
         <div id="preview-content" class="preview-content" style="display: none;">
@@ -94,22 +72,16 @@
             <div class="preview-title-row">
               <h1 id="preview-title" class="preview-title"></h1>
               <div class="preview-actions">
-                <button id="copy-id-btn" class="btn btn-sm btn-secondary" title="Copy Short ID (C)">
-                  📋 <span id="preview-short-id"></span>
+                <button id="copy-id-btn" class="btn btn-sm btn-secondary" title="Copy ID (C)">
+                  <span id="preview-short-id"></span>
                 </button>
-                <button id="toggle-status-btn" class="btn btn-sm btn-secondary" title="Toggle Status (T)">
-                  ✓ Toggle
-                </button>
-                <button id="edit-note-btn" class="btn btn-sm btn-secondary" title="Edit Note (E)">
-                  ✏️ Edit
-                </button>
-                <button id="delete-note-btn" class="btn btn-sm btn-danger" title="Soft-delete Note">
-                  🗑️
-                </button>
+                <button id="toggle-status-btn" class="btn btn-sm btn-secondary" title="Toggle Status (T)">Done</button>
+                <button id="edit-note-btn" class="btn btn-sm btn-secondary" title="Edit Note (E)">Edit</button>
+                <button id="delete-note-btn" class="btn btn-sm btn-secondary" title="Delete Note">Delete</button>
               </div>
             </div>
 
-            <!-- Metadata Badges -->
+            <!-- Metadata Row -->
             <div class="preview-meta-row">
               <span id="preview-type-badge" class="type-badge"></span>
               <span id="preview-status-badge" class="status-badge"></span>
@@ -118,25 +90,25 @@
               <span id="preview-updated-time" class="time-meta"></span>
             </div>
 
-            <!-- Tags Row -->
+            <!-- Tags -->
             <div id="preview-tags-row" class="preview-tags-row"></div>
           </div>
 
-          <!-- Preview Body (Markdown Rendered) -->
+          <!-- Markdown Content -->
           <div class="preview-body-container">
             <div id="preview-markdown-body" class="markdown-body"></div>
           </div>
 
-          <!-- Graph Links & Backlinks Section -->
+          <!-- Graph Relations -->
           <div id="preview-graph-section" class="preview-graph-section" style="display: none;">
-            <div class="graph-section-title">🔗 Graph Relations & Backlinks</div>
+            <div class="graph-section-title">Relations & Backlinks</div>
             <div id="preview-links-list" class="links-list"></div>
           </div>
 
-          <!-- Audit Timeline Section -->
+          <!-- Revision History -->
           <div id="preview-history-section" class="preview-history-section" style="display: none;">
             <div class="history-section-header">
-              <span class="history-section-title">📜 Revision History</span>
+              <span class="history-section-title">History</span>
               <button id="toggle-history-btn" class="btn-text">Hide</button>
             </div>
             <div id="preview-history-list" class="history-list"></div>
@@ -145,35 +117,34 @@
       </section>
     </main>
 
-    <!-- Footer: Keyboard Shortcuts -->
+    <!-- Footer: Minimal Shortcuts Bar -->
     <footer class="app-footer">
       <div class="shortcut-hints">
-        <span class="hint-item"><kbd>↑</kbd><kbd>↓</kbd> / <kbd>j</kbd><kbd>k</kbd> Navigate</span>
-        <span class="hint-item"><kbd>/</kbd> or <kbd>Ctrl+K</kbd> Search</span>
+        <span class="hint-item"><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
+        <span class="hint-item"><kbd>/</kbd> Search</span>
         <span class="hint-item"><kbd>Esc</kbd> Clear</span>
-        <span class="hint-item"><kbd>Ctrl+N</kbd> New</span>
-        <span class="hint-item"><kbd>T</kbd> Toggle Status</span>
+        <span class="hint-item"><kbd>N</kbd> New</span>
+        <span class="hint-item"><kbd>T</kbd> Toggle</span>
         <span class="hint-item"><kbd>C</kbd> Copy ID</span>
-        <span class="hint-item"><kbd>M</kbd> Copy Markdown</span>
+        <span class="hint-item"><kbd>M</kbd> Copy MD</span>
+        <span class="hint-item"><kbd>E</kbd> Edit</span>
       </div>
-      <div class="footer-stats" id="footer-stats">
-        KB System Active
-      </div>
+      <div class="footer-stats" id="footer-stats"></div>
     </footer>
 
-    <!-- New Note / Quick Capture Modal -->
+    <!-- Note Modal -->
     <div id="note-modal" class="modal-backdrop" style="display: none;">
       <div class="modal-card">
         <div class="modal-header">
-          <h2 id="modal-title" class="modal-title">Create New Note</h2>
+          <h2 id="modal-title" class="modal-title">New Note</h2>
           <button id="modal-close-btn" class="btn-icon">✕</button>
         </div>
         <form id="note-form" class="modal-form">
           <input type="hidden" id="form-note-id" value="">
           
           <div class="form-group">
-            <label for="form-title">Title / Thought</label>
-            <input type="text" id="form-title" class="form-input" placeholder="What's on your mind?..." required>
+            <label for="form-title">Title</label>
+            <input type="text" id="form-title" class="form-input" placeholder="Title..." required>
           </div>
 
           <div class="form-row">
@@ -181,7 +152,7 @@
               <label for="form-type">Type</label>
               <select id="form-type" class="form-select">
                 <option value="note">Note</option>
-                <option value="todo">Todo / Task</option>
+                <option value="todo">Todo</option>
                 <option value="project">Project</option>
                 <option value="idea">Idea</option>
                 <option value="decision">Decision</option>
@@ -205,7 +176,7 @@
 
             <div class="form-group form-col">
               <label for="form-area">Area</label>
-              <input type="text" id="form-area" class="form-input" placeholder="e.g. work, personal">
+              <input type="text" id="form-area" class="form-input" placeholder="work, personal...">
             </div>
 
             <div class="form-group form-col">
@@ -215,24 +186,24 @@
           </div>
 
           <div class="form-group">
-            <label for="form-tags">Tags (comma-separated)</label>
-            <input type="text" id="form-tags" class="form-input" placeholder="e.g. golang, architecture, backend">
+            <label for="form-tags">Tags</label>
+            <input type="text" id="form-tags" class="form-input" placeholder="golang, backend...">
           </div>
 
           <div class="form-group">
-            <label for="form-flesh">Content / Markdown Body</label>
-            <textarea id="form-flesh" class="form-textarea" rows="8" placeholder="Detailed notes, markdown, tasks, code snippets..."></textarea>
+            <label for="form-flesh">Content</label>
+            <textarea id="form-flesh" class="form-textarea" rows="8" placeholder="Markdown body..."></textarea>
           </div>
 
           <div class="modal-footer">
             <button type="button" id="modal-cancel-btn" class="btn btn-secondary">Cancel</button>
-            <button type="submit" id="modal-submit-btn" class="btn btn-primary">Save Note</button>
+            <button type="submit" id="modal-submit-btn" class="btn btn-primary">Save</button>
           </div>
         </form>
       </div>
     </div>
 
-    <!-- Notification Toast -->
+    <!-- Toast Notification -->
     <div id="toast" class="toast" style="display: none;"></div>
   </div>
 

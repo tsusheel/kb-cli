@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tsusheel/kb-cli/db"
 	"github.com/tsusheel/kb-cli/models"
+	"github.com/tsusheel/kb-cli/sync"
 	"github.com/tsusheel/kb-cli/utils"
 )
 
@@ -29,6 +31,7 @@ func RegisterRoutes() http.Handler {
 	mux.HandleFunc("/api/logs", handleLogsCollection)
 	mux.HandleFunc("/api/stats", handleGetStats)
 	mux.HandleFunc("/api/tags", handleGetTags)
+	mux.HandleFunc("/api/sync", handleSync)
 
 	// Static Web Assets
 	webFS, err := fs.Sub(embeddedFiles, "web")
@@ -545,4 +548,64 @@ func handleGetTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, http.StatusOK, tags)
+}
+
+func handleSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	if !utils.IsRemoteEnabled() {
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"remote":  false,
+			"message": "Local only (remote sync is not enabled in config)",
+		})
+		return
+	}
+
+	rawURL := utils.GetPostgresURL()
+	if rawURL == "" {
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"remote":  false,
+			"message": "Local only (no remote database URL configured)",
+		})
+		return
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, fmt.Sprintf("invalid postgres URL: %v", err))
+		return
+	}
+
+	if parsed.User != nil {
+		if _, hasPass := parsed.User.Password(); !hasPass {
+			if secretPass, err := utils.GetSecret("postgres_password"); err == nil && secretPass != "" {
+				parsed.User = url.UserPassword(parsed.User.Username(), secretPass)
+			}
+		}
+	}
+
+	client, err := sync.NewPostgresClient(parsed.String())
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, fmt.Sprintf("failed to connect to remote database: %v", err))
+		return
+	}
+	defer client.Close()
+
+	stats, err := client.TwoWaySync()
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, fmt.Sprintf("sync failed: %v", err))
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"remote":  true,
+		"stats":   stats,
+		"message": fmt.Sprintf("Synced: %d pushed, %d pulled (%s)", stats.NotesPushed+stats.LogsPushed, stats.NotesPulled+stats.LogsPulled, stats.Duration.Round(time.Millisecond)),
+	})
 }
