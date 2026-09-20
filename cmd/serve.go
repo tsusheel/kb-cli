@@ -3,21 +3,68 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 	"github.com/tsusheel/kb-cli/mcp"
+	"github.com/tsusheel/kb-cli/server"
+)
+
+var (
+	serveHTTPPort int
+	serveHTTPHost string
+	serveHTTPOpen bool
 )
 
 var serveCmd = &cobra.Command{
-	Use:     "serve",
+	Use:     "serve [subcommand]",
 	Aliases: []string{"mcp"},
-	Short:   "Start MCP (Model Context Protocol) server over stdio for AI agent connectivity",
-	Long: `Start the MCP server over standard input/output (stdio).
+	Short:   "Start MCP server (stdio) or Web Fuzzy Finder HTTP server",
+	Long: `Start server services for kb-cli.
 
-This allows AI assistants and agents (Claude Desktop, Antigravity, Cursor, Cline, etc.)
-to list, filter, search, create, update, and manage your knowledge base notes.`,
+Subcommands:
+  kb serve http   Start the interactive web-based fuzzy finder with live preview pane
+  kb serve mcp    Start the Model Context Protocol (MCP) server over stdio for AI agents
+
+Running 'kb serve' without a subcommand defaults to starting the MCP stdio server.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Default to MCP server for backward compatibility
+		return mcp.StartServer()
+	},
+}
+
+var serveMCPCmd = &cobra.Command{
+	Use:     "mcp",
+	Aliases: []string{"stdio"},
+	Short:   "Start MCP (Model Context Protocol) server over stdio for AI agent connectivity",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return mcp.StartServer()
 	},
 }
 
+var serveHTTPCmd = &cobra.Command{
+	Use:     "http",
+	Aliases: []string{"web", "ui"},
+	Short:   "Start a modern web-based fuzzy finder with live preview pane",
+	Long: `Start a lightweight embedded web server hosting an interactive fuzzy finder
+with a dual-pane live markdown preview, real-time filtering, and keyboard navigation.
+
+Examples:
+  kb serve http
+  kb serve http --port 3000 --open
+  kb serve web -p 8080 -o`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg := server.Config{
+			Host:        serveHTTPHost,
+			Port:        serveHTTPPort,
+			OpenBrowser: serveHTTPOpen,
+		}
+		return server.Start(cfg)
+	},
+}
+
 func init() {
+	serveHTTPCmd.Flags().IntVarP(&serveHTTPPort, "port", "p", 8080, "Port to listen on")
+	serveHTTPCmd.Flags().StringVar(&serveHTTPHost, "host", "127.0.0.1", "Host address to bind to")
+	serveHTTPCmd.Flags().BoolVarP(&serveHTTPOpen, "open", "o", false, "Automatically open web finder in default browser")
+
+	serveCmd.AddCommand(serveMCPCmd)
+	serveCmd.AddCommand(serveHTTPCmd)
 	rootCmd.AddCommand(serveCmd)
 }

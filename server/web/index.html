@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KB — Knowledge Base Fuzzy Finder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="app" class="app-layout">
+    <!-- Top Command & Search Bar -->
+    <header class="app-header">
+      <div class="logo-area">
+        <div class="logo-icon">📦</div>
+        <div class="logo-text">
+          <span class="logo-title">KB Finder</span>
+          <span id="active-profile" class="logo-badge">local</span>
+        </div>
+      </div>
+
+      <div class="search-container">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="Type to fuzzy search notes, todos, projects, tags... (Press '/' to focus)" 
+            autocomplete="off" 
+            spellcheck="false"
+            autofocus
+          >
+          <button id="clear-search-btn" class="btn-icon" title="Clear search (Esc)" style="display: none;">✕</button>
+          <div class="search-count-badge" id="search-count">0 items</div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="new-note-btn" class="btn btn-primary" title="New Note (Ctrl+N or N)">
+          <span class="btn-icon-plus">+</span> New Note
+        </button>
+        <button id="refresh-btn" class="btn btn-secondary btn-icon-only" title="Refresh data (Ctrl+R)">
+          🔄
+        </button>
+      </div>
+    </header>
+
+    <!-- Filter Pills Bar -->
+    <nav class="filter-bar">
+      <div class="filter-pills" id="type-filter-pills">
+        <button class="pill active" data-filter="all">All <span class="pill-count" id="count-all">0</span></button>
+        <button class="pill" data-filter="note">Notes <span class="pill-count" id="count-note">0</span></button>
+        <button class="pill" data-filter="todo">Todos <span class="pill-count" id="count-todo">0</span></button>
+        <button class="pill" data-filter="project">Projects <span class="pill-count" id="count-project">0</span></button>
+        <button class="pill" data-filter="idea">Ideas <span class="pill-count" id="count-idea">0</span></button>
+        <button class="pill" data-filter="log">Daily Logs <span class="pill-count" id="count-log">0</span></button>
+        <button class="pill pill-archive" data-filter="archived">Deleted / Archive <span class="pill-count" id="count-archived">0</span></button>
+      </div>
+
+      <div class="tag-filter-container">
+        <div class="tag-scroll-area" id="tag-pills">
+          <!-- Dynamic Tag Pills -->
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Dual-Pane Content -->
+    <main class="main-split-container">
+      <!-- Left Pane: Fuzzy Results List -->
+      <section class="results-pane" id="results-pane">
+        <div class="pane-header">
+          <span class="pane-title">Matching Items</span>
+          <span class="pane-subtitle" id="sort-info">Ranked by relevance</span>
+        </div>
+        <div class="results-list" id="results-list" tabindex="0">
+          <!-- Rendered Search Items -->
+          <div class="loading-state">Loading knowledge base...</div>
+        </div>
+      </section>
+
+      <!-- Right Pane: Live Preview -->
+      <section class="preview-pane" id="preview-pane">
+        <div id="preview-empty" class="preview-empty-state">
+          <div class="empty-icon">📂</div>
+          <div class="empty-title">Select an item to preview</div>
+          <div class="empty-desc">Use <kbd>↑</kbd> <kbd>↓</kbd> or <kbd>j</kbd> <kbd>k</kbd> to navigate through notes</div>
+        </div>
+
+        <div id="preview-content" class="preview-content" style="display: none;">
+          <!-- Preview Header -->
+          <div class="preview-header">
+            <div class="preview-title-row">
+              <h1 id="preview-title" class="preview-title"></h1>
+              <div class="preview-actions">
+                <button id="copy-id-btn" class="btn btn-sm btn-secondary" title="Copy Short ID (C)">
+                  📋 <span id="preview-short-id"></span>
+                </button>
+                <button id="toggle-status-btn" class="btn btn-sm btn-secondary" title="Toggle Status (T)">
+                  ✓ Toggle
+                </button>
+                <button id="edit-note-btn" class="btn btn-sm btn-secondary" title="Edit Note (E)">
+                  ✏️ Edit
+                </button>
+                <button id="delete-note-btn" class="btn btn-sm btn-danger" title="Soft-delete Note">
+                  🗑️
+                </button>
+              </div>
+            </div>
+
+            <!-- Metadata Badges -->
+            <div class="preview-meta-row">
+              <span id="preview-type-badge" class="type-badge"></span>
+              <span id="preview-status-badge" class="status-badge"></span>
+              <span id="preview-area-badge" class="area-badge" style="display: none;"></span>
+              <span id="preview-due-badge" class="due-badge" style="display: none;"></span>
+              <span id="preview-updated-time" class="time-meta"></span>
+            </div>
+
+            <!-- Tags Row -->
+            <div id="preview-tags-row" class="preview-tags-row"></div>
+          </div>
+
+          <!-- Preview Body (Markdown Rendered) -->
+          <div class="preview-body-container">
+            <div id="preview-markdown-body" class="markdown-body"></div>
+          </div>
+
+          <!-- Graph Links & Backlinks Section -->
+          <div id="preview-graph-section" class="preview-graph-section" style="display: none;">
+            <div class="graph-section-title">🔗 Graph Relations & Backlinks</div>
+            <div id="preview-links-list" class="links-list"></div>
+          </div>
+
+          <!-- Audit Timeline Section -->
+          <div id="preview-history-section" class="preview-history-section" style="display: none;">
+            <div class="history-section-header">
+              <span class="history-section-title">📜 Revision History</span>
+              <button id="toggle-history-btn" class="btn-text">Hide</button>
+            </div>
+            <div id="preview-history-list" class="history-list"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer: Keyboard Shortcuts -->
+    <footer class="app-footer">
+      <div class="shortcut-hints">
+        <span class="hint-item"><kbd>↑</kbd><kbd>↓</kbd> / <kbd>j</kbd><kbd>k</kbd> Navigate</span>
+        <span class="hint-item"><kbd>/</kbd> or <kbd>Ctrl+K</kbd> Search</span>
+        <span class="hint-item"><kbd>Esc</kbd> Clear</span>
+        <span class="hint-item"><kbd>Ctrl+N</kbd> New</span>
+        <span class="hint-item"><kbd>T</kbd> Toggle Status</span>
+        <span class="hint-item"><kbd>C</kbd> Copy ID</span>
+        <span class="hint-item"><kbd>M</kbd> Copy Markdown</span>
+      </div>
+      <div class="footer-stats" id="footer-stats">
+        KB System Active
+      </div>
+    </footer>
+
+    <!-- New Note / Quick Capture Modal -->
+    <div id="note-modal" class="modal-backdrop" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 id="modal-title" class="modal-title">Create New Note</h2>
+          <button id="modal-close-btn" class="btn-icon">✕</button>
+        </div>
+        <form id="note-form" class="modal-form">
+          <input type="hidden" id="form-note-id" value="">
+          
+          <div class="form-group">
+            <label for="form-title">Title / Thought</label>
+            <input type="text" id="form-title" class="form-input" placeholder="What's on your mind?..." required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group form-col">
+              <label for="form-type">Type</label>
+              <select id="form-type" class="form-select">
+                <option value="note">Note</option>
+                <option value="todo">Todo / Task</option>
+                <option value="project">Project</option>
+                <option value="idea">Idea</option>
+                <option value="decision">Decision</option>
+                <option value="concept">Concept</option>
+                <option value="til">TIL</option>
+                <option value="resource">Resource</option>
+              </select>
+            </div>
+
+            <div class="form-group form-col">
+              <label for="form-status">Status</label>
+              <select id="form-status" class="form-select">
+                <option value="raw">Raw</option>
+                <option value="active">Active</option>
+                <option value="in-progress">In-Progress</option>
+                <option value="refined">Refined</option>
+                <option value="completed">Completed</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+
+            <div class="form-group form-col">
+              <label for="form-area">Area</label>
+              <input type="text" id="form-area" class="form-input" placeholder="e.g. work, personal">
+            </div>
+
+            <div class="form-group form-col">
+              <label for="form-due">Due Date</label>
+              <input type="text" id="form-due" class="form-input" placeholder="e.g. today, 2026-09-30">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="form-tags">Tags (comma-separated)</label>
+            <input type="text" id="form-tags" class="form-input" placeholder="e.g. golang, architecture, backend">
+          </div>
+
+          <div class="form-group">
+            <label for="form-flesh">Content / Markdown Body</label>
+            <textarea id="form-flesh" class="form-textarea" rows="8" placeholder="Detailed notes, markdown, tasks, code snippets..."></textarea>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" id="modal-cancel-btn" class="btn btn-secondary">Cancel</button>
+            <button type="submit" id="modal-submit-btn" class="btn btn-primary">Save Note</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast" style="display: none;"></div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
