@@ -72,6 +72,7 @@
             <div class="preview-title-row">
               <h1 id="preview-title" class="preview-title"></h1>
               <div class="preview-actions">
+                <button id="toggle-view-btn" class="btn btn-sm btn-secondary" title="Toggle Raw / Rendered Markdown (V)">Raw</button>
                 <button id="copy-id-btn" class="btn btn-sm btn-secondary" title="Copy ID (C)">
                   <span id="preview-short-id"></span>
                 </button>
@@ -97,6 +98,7 @@
           <!-- Markdown Content -->
           <div class="preview-body-container">
             <div id="preview-markdown-body" class="markdown-body"></div>
+            <pre id="preview-raw-body" class="raw-body" style="display: none;"></pre>
           </div>
 
           <!-- Graph Relations -->
@@ -123,6 +125,7 @@
         <span class="hint-item"><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
         <span class="hint-item"><kbd>/</kbd> Search</span>
         <span class="hint-item"><kbd>Esc</kbd> Clear</span>
+        <span class="hint-item"><kbd>V</kbd> View</span>
         <span class="hint-item"><kbd>N</kbd> New</span>
         <span class="hint-item"><kbd>T</kbd> Toggle</span>
         <span class="hint-item"><kbd>C</kbd> Copy ID</span>

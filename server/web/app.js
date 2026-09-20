@@ -12,6 +12,7 @@
   let activeTypeFilter = 'all';
   let activeTagFilter = null;
   let currentNoteDetail = null;
+  let isRawView = false;
 
   // DOM Elements
   const searchInput = document.getElementById('search-input');
@@ -29,6 +30,7 @@
   const previewUpdatedTime = document.getElementById('preview-updated-time');
   const previewTagsRow = document.getElementById('preview-tags-row');
   const previewMarkdownBody = document.getElementById('preview-markdown-body');
+  const previewRawBody = document.getElementById('preview-raw-body');
   const previewGraphSection = document.getElementById('preview-graph-section');
   const previewLinksList = document.getElementById('preview-links-list');
   const previewHistorySection = document.getElementById('preview-history-section');
@@ -39,6 +41,7 @@
   const footerStats = document.getElementById('footer-stats');
   const newNoteBtn = document.getElementById('new-note-btn');
   const syncBtn = document.getElementById('sync-btn');
+  const toggleViewBtn = document.getElementById('toggle-view-btn');
   const copyIdBtn = document.getElementById('copy-id-btn');
   const toggleStatusBtn = document.getElementById('toggle-status-btn');
   const editNoteBtn = document.getElementById('edit-note-btn');
@@ -136,6 +139,10 @@
     }
 
     // Preview Actions
+    if (toggleViewBtn) {
+      toggleViewBtn.addEventListener('click', () => toggleViewMode());
+    }
+
     copyIdBtn.addEventListener('click', () => {
       const item = filteredItems[selectedIndex];
       if (item) {
@@ -218,7 +225,10 @@
 
     // Actions when not typing in an input
     if (!isInputFocused) {
-      if (e.key === 'n' || e.key === 'N') {
+      if (e.key === 'v' || e.key === 'V') {
+        e.preventDefault();
+        toggleViewMode();
+      } else if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
         openNoteModal();
       } else if (e.key === 't' || e.key === 'T') {
@@ -513,6 +523,23 @@
     }
   }
 
+  function toggleViewMode() {
+    isRawView = !isRawView;
+    updateViewModeDisplay();
+  }
+
+  function updateViewModeDisplay() {
+    if (toggleViewBtn) {
+      toggleViewBtn.textContent = isRawView ? 'Preview' : 'Raw';
+      toggleViewBtn.classList.toggle('active', isRawView);
+      toggleViewBtn.title = isRawView ? 'Show Rendered Markdown (V)' : 'Show Raw Text (V)';
+    }
+    if (previewMarkdownBody && previewRawBody) {
+      previewMarkdownBody.style.display = isRawView ? 'none' : 'block';
+      previewRawBody.style.display = isRawView ? 'block' : 'none';
+    }
+  }
+
   function renderPreviewBasic(item) {
     previewEmpty.style.display = 'none';
     previewContent.style.display = 'block';
@@ -545,13 +572,18 @@
       previewTagsRow.innerHTML = '';
     }
 
-    previewMarkdownBody.innerHTML = renderMarkdown(item.flesh || item.display);
+    const rawContent = (item.flesh || item.display || '').trim();
+    if (previewRawBody) previewRawBody.textContent = rawContent;
+    if (previewMarkdownBody) previewMarkdownBody.innerHTML = renderMarkdown(rawContent);
+    updateViewModeDisplay();
+
     previewGraphSection.style.display = 'none';
     previewHistorySection.style.display = 'none';
 
     toggleStatusBtn.textContent = item.status === 'completed' ? 'Reopen' : 'Done';
     toggleStatusBtn.style.display = (item.type === 'todo' || item.type === 'project') ? 'inline-flex' : 'none';
     editNoteBtn.style.display = item.is_log ? 'none' : 'inline-flex';
+    if (toggleViewBtn) toggleViewBtn.style.display = 'inline-flex';
   }
 
   function renderPreviewDetail(note) {
@@ -565,6 +597,10 @@
         <span class="preview-tag-chip" data-tag="${escapeHtml(t)}">#${escapeHtml(t)}</span>
       `).join('');
     }
+
+    const rawContent = (note.note_flesh || note.note || '').trim();
+    if (previewRawBody) previewRawBody.textContent = rawContent;
+    if (previewMarkdownBody) previewMarkdownBody.innerHTML = renderMarkdown(rawContent);
 
     // Graph Links
     if (note.links && note.links.length > 0) {
@@ -617,47 +653,127 @@
 
   // Markdown Parser
   function renderMarkdown(text) {
-    if (!text) return '<p><em>(no content)</em></p>';
+    if (!text || !text.trim()) {
+      return '<p><em>(no content)</em></p>';
+    }
 
+    // Step 1: Escape HTML entities safely
     let html = escapeHtml(text);
 
-    // Code blocks with syntax box
-    html = html.replace(/```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
-      return `<pre><code class="lang-${lang}">${code.trim()}</code></pre>`;
+    // Step 2: Code blocks (fenced) -> placeholder tokens
+    const codeBlocks = [];
+    html = html.replace(/```([a-zA-Z0-9_+-]*)\r?\n([\s\S]*?)```/g, (match, lang, code) => {
+      const id = codeBlocks.length;
+      codeBlocks.push({ lang: lang ? escapeHtml(lang) : '', code });
+      return `\n%%CODEBLOCK${id}%%\n`;
     });
 
-    // Inline code
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Step 3: Inline code -> placeholder tokens
+    const inlineCodes = [];
+    html = html.replace(/`([^`\r\n]+)`/g, (match, code) => {
+      const id = inlineCodes.length;
+      inlineCodes.push(code);
+      return `%%INLINECODE${id}%%`;
+    });
 
-    // Headers
-    html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-    html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-    html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-
-    // Blockquotes
-    html = html.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
-
-    // Checklists
-    html = html.replace(/^- \[x\] (.*$)/gim, '<p><input type="checkbox" checked disabled> <s>$1</s></p>');
-    html = html.replace(/^- \[ \] (.*$)/gim, '<p><input type="checkbox" disabled> $1</p>');
-
-    // Bullet lists
-    html = html.replace(/^\* (.*$)/gim, '<li>$1</li>');
-    html = html.replace(/^- (.*$)/gim, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-
-    // Bold & Italic
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-    // Line breaks to paragraphs
-    const paragraphs = html.split(/\n\n+/);
-    html = paragraphs.map(p => {
-      if (p.startsWith('<h') || p.startsWith('<pre') || p.startsWith('<ul') || p.startsWith('<blockquote')) {
-        return p;
+    // Step 4: Tables
+    html = html.replace(/(?:^|\n)([ \t]*\|.+?\|[ \t]*(?:\r?\n|$)){2,}/g, (match) => {
+      const lines = match.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) return match;
+      if (!/^\|(?:\s*:?-+:?\s*\|)+$/.test(lines[1])) {
+        return match;
       }
-      return `<p>${p.replace(/\n/g, '<br>')}</p>`;
-    }).join('');
+      const parseCells = (l) => l.slice(1, -1).split('|').map(c => c.trim());
+      const headers = parseCells(lines[0]);
+      let tHtml = '<table><thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+      for (let i = 2; i < lines.length; i++) {
+        const cells = parseCells(lines[i]);
+        tHtml += '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>';
+      }
+      tHtml += '</tbody></table>';
+      return '\n' + tHtml + '\n';
+    });
+
+    // Step 5: Headers
+    html = html.replace(/^######[ \t]+(.*)$/gm, '<h6>$1</h6>');
+    html = html.replace(/^#####[ \t]+(.*)$/gm, '<h5>$1</h5>');
+    html = html.replace(/^####[ \t]+(.*)$/gm, '<h4>$1</h4>');
+    html = html.replace(/^###[ \t]+(.*)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^##[ \t]+(.*)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^#[ \t]+(.*)$/gm, '<h1>$1</h1>');
+
+    // Step 6: Horizontal Rules
+    html = html.replace(/^[ \t]*(?:[-*_][ \t]*){3,}$/gm, '<hr>');
+
+    // Step 7: Blockquotes
+    html = html.replace(/(?:^[ \t]*>[ \t]?(?:.*)(?:\r?\n|$))+/gm, (match) => {
+      const inner = match.trim().split(/\r?\n/).map(l => l.replace(/^[ \t]*>[ \t]?/, '')).join('<br>');
+      return `<blockquote>${inner}</blockquote>`;
+    });
+
+    // Step 8: Task lists (- [ ] or - [x])
+    html = html.replace(/(?:^[ \t]*[-*][ \t]\[([ xX])\][ \t]+(.*?)(?:\r?\n|$))+/gm, (match) => {
+      const items = match.trim().split(/\r?\n/).map(line => {
+        const m = line.match(/^[ \t]*[-*][ \t]\[([ xX])\][ \t]+(.*)$/);
+        if (!m) return '';
+        const isChecked = m[1].toLowerCase() === 'x';
+        return `<li class="task-item"><input type="checkbox" ${isChecked ? 'checked' : ''} disabled> <span>${m[2]}</span></li>`;
+      }).filter(Boolean).join('');
+      return `<ul class="task-list">${items}</ul>`;
+    });
+
+    // Step 9: Unordered Lists
+    html = html.replace(/(?:^[ \t]*[-*][ \t]+(?!\<li class="task-item"|\[[ xX]\])(.*?)(?:\r?\n|$))+/gm, (match) => {
+      const items = match.trim().split(/\r?\n/).map(line => {
+        return `<li>${line.replace(/^[ \t]*[-*][ \t]+/, '')}</li>`;
+      }).join('');
+      return `<ul>${items}</ul>`;
+    });
+
+    // Step 10: Ordered Lists
+    html = html.replace(/(?:^[ \t]*\d+\.[ \t]+(.*?)(?:\r?\n|$))+/gm, (match) => {
+      const items = match.trim().split(/\r?\n/).map(line => {
+        return `<li>${line.replace(/^[ \t]*\d+\.[ \t]+/, '')}</li>`;
+      }).join('');
+      return `<ol>${items}</ol>`;
+    });
+
+    // Step 11: Links
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+    // Step 12: Bold, Italic, Strikethrough
+    html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    html = html.replace(/(^|[^\w])_([^_\r\n]+)_(?=[^\w]|$)/g, '$1<em>$2</em>');
+    html = html.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
+
+    // Step 13: Paragraphs
+    const blocks = html.split(/\r?\n\r?\n+/);
+    html = blocks.map(block => {
+      block = block.trim();
+      if (!block) return '';
+      if (block.startsWith('<h') || block.startsWith('<ul') || block.startsWith('<ol') ||
+          block.startsWith('<blockquote') || block.startsWith('<table') || block.startsWith('<hr') ||
+          block.startsWith('%%CODEBLOCK')) {
+        return block;
+      }
+      return `<p>${block.replace(/\r?\n/g, '<br>')}</p>`;
+    }).filter(Boolean).join('');
+
+    // Step 14: Restore code blocks
+    html = html.replace(/%%CODEBLOCK(\d+)%%/g, (match, id) => {
+      const block = codeBlocks[id];
+      if (!block) return '';
+      const langClass = block.lang ? ` class="lang-${block.lang}"` : '';
+      return `<pre><code${langClass}>${block.code}</code></pre>`;
+    });
+
+    // Step 15: Restore inline code
+    html = html.replace(/%%INLINECODE(\d+)%%/g, (match, id) => {
+      return `<code>${inlineCodes[id] || ''}</code>`;
+    });
 
     return html;
   }
