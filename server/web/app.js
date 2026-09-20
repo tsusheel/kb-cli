@@ -657,122 +657,215 @@
       return '<p><em>(no content)</em></p>';
     }
 
-    // Step 1: Escape HTML entities safely
-    let html = escapeHtml(text);
+    // Step 1: Normalize line endings
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-    // Step 2: Code blocks (fenced) -> placeholder tokens
+    // Step 2: Extract code blocks
     const codeBlocks = [];
-    html = html.replace(/```([a-zA-Z0-9_+-]*)\r?\n([\s\S]*?)```/g, (match, lang, code) => {
+    text = text.replace(/(?:^|\n)```([a-zA-Z0-9_+-]*)\n([\s\S]*?)\n```/g, (match, lang, code) => {
       const id = codeBlocks.length;
-      codeBlocks.push({ lang: lang ? escapeHtml(lang) : '', code });
-      return `\n%%CODEBLOCK${id}%%\n`;
+      codeBlocks.push({ lang: lang.trim(), code: escapeHtml(code) });
+      return `\n\n%%BLOCK_CODE_${id}%%\n\n`;
     });
 
-    // Step 3: Inline code -> placeholder tokens
+    // Handle code blocks at EOF without trailing newline
+    text = text.replace(/(?:^|\n)```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```$/g, (match, lang, code) => {
+      const id = codeBlocks.length;
+      codeBlocks.push({ lang: lang.trim(), code: escapeHtml(code) });
+      return `\n\n%%BLOCK_CODE_${id}%%\n\n`;
+    });
+
+    // Step 3: Extract inline code
     const inlineCodes = [];
-    html = html.replace(/`([^`\r\n]+)`/g, (match, code) => {
+    text = text.replace(/`([^`\n]+)`/g, (match, code) => {
       const id = inlineCodes.length;
-      inlineCodes.push(code);
-      return `%%INLINECODE${id}%%`;
+      inlineCodes.push(escapeHtml(code));
+      return `%%INLINE_CODE_${id}%%`;
     });
 
-    // Step 4: Tables
-    html = html.replace(/(?:^|\n)([ \t]*\|.+?\|[ \t]*(?:\r?\n|$)){2,}/g, (match) => {
-      const lines = match.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      if (lines.length < 2) return match;
-      if (!/^\|(?:\s*:?-+:?\s*\|)+$/.test(lines[1])) {
-        return match;
+    // Inline formatting processor
+    function parseInline(str) {
+      if (!str) return '';
+
+      let s = escapeHtml(str);
+
+      // Links: [text](url)
+      s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+      // Auto links: https://...
+      s = s.replace(/(^|[\s(])(https?:\/\/[^\s)<]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
+
+      // Bold: **text** or __text__
+      s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+      s = s.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+
+      // Italic: *text* or _text_
+      s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+      s = s.replace(/(^|[^\w])_([^_\n]+)_(?=[^\w]|$)/g, '$1<em>$2</em>');
+
+      // Strikethrough: ~~text~~
+      s = s.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
+
+      return s;
+    }
+
+    // Block-level processor
+    function parseBlocks(src) {
+      const lines = src.split('\n');
+      const out = [];
+      let i = 0;
+
+      while (i < lines.length) {
+        const line = lines[i];
+
+        // 1. Code block token placeholder
+        const codeBlockMatch = line.trim().match(/^%%BLOCK_CODE_(\d+)%%$/);
+        if (codeBlockMatch) {
+          const id = parseInt(codeBlockMatch[1], 10);
+          const block = codeBlocks[id];
+          if (block) {
+            const langClass = block.lang ? ` class="lang-${block.lang}"` : '';
+            out.push(`<pre><code${langClass}>${block.code}</code></pre>`);
+          }
+          i++;
+          continue;
+        }
+
+        // 2. Blank line
+        if (line.trim() === '') {
+          i++;
+          continue;
+        }
+
+        // 3. Headers (# to ######)
+        const headerMatch = line.match(/^(#{1,6})[ \t]+(.*)$/);
+        if (headerMatch) {
+          const level = headerMatch[1].length;
+          const content = parseInline(headerMatch[2].trim());
+          out.push(`<h${level}>${content}</h${level}>`);
+          i++;
+          continue;
+        }
+
+        // 4. Horizontal rule
+        if (/^[ \t]*(?:[-*_][ \t]*){3,}$/.test(line)) {
+          out.push('<hr>');
+          i++;
+          continue;
+        }
+
+        // 5. Blockquote (groups contiguous > lines)
+        if (/^[ \t]*>/.test(line)) {
+          const quoteLines = [];
+          while (i < lines.length && /^[ \t]*>/.test(lines[i])) {
+            quoteLines.push(lines[i].replace(/^[ \t]*>[ \t]?/, ''));
+            i++;
+          }
+          const innerHtml = parseBlocks(quoteLines.join('\n'));
+          out.push(`<blockquote>${innerHtml}</blockquote>`);
+          continue;
+        }
+
+        // 6. Table (lines starting and ending with |)
+        if (/^[ \t]*\|.+?\|[ \t]*$/.test(line)) {
+          const tableLines = [];
+          while (i < lines.length && /^[ \t]*\|.+?\|[ \t]*$/.test(lines[i])) {
+            tableLines.push(lines[i].trim());
+            i++;
+          }
+          if (tableLines.length >= 1) {
+            const parseRow = (l) => l.slice(1, -1).split('|').map(c => parseInline(c.trim()));
+            let startIdx = 0;
+            let hasHeaderDivider = false;
+            if (tableLines.length >= 2 && /^\|(?:\s*:?-+:?\s*\|)+$/.test(tableLines[1])) {
+              hasHeaderDivider = true;
+            }
+
+            let tHtml = '<table>';
+            if (hasHeaderDivider) {
+              const headers = parseRow(tableLines[0]);
+              tHtml += '<thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+              startIdx = 2;
+            } else {
+              tHtml += '<tbody>';
+              startIdx = 0;
+            }
+
+            for (let r = startIdx; r < tableLines.length; r++) {
+              if (/^\|(?:\s*:?-+:?\s*\|)+$/.test(tableLines[r])) continue;
+              const cells = parseRow(tableLines[r]);
+              tHtml += '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>';
+            }
+            tHtml += '</tbody></table>';
+            out.push(tHtml);
+            continue;
+          }
+        }
+
+        // 7. Task list or Unordered list
+        if (/^[ \t]*[-*][ \t]/.test(line)) {
+          const listItems = [];
+          let isTaskList = false;
+          while (i < lines.length && /^[ \t]*[-*][ \t]/.test(lines[i])) {
+            const curLine = lines[i];
+            const taskMatch = curLine.match(/^[ \t]*[-*][ \t]\[([ xX])\][ \t]+(.*)$/);
+            if (taskMatch) {
+              isTaskList = true;
+              const checked = taskMatch[1].toLowerCase() === 'x';
+              const content = parseInline(taskMatch[2].trim());
+              listItems.push(`<li class="task-item"><input type="checkbox" ${checked ? 'checked' : ''} disabled> <span>${content}</span></li>`);
+            } else {
+              const content = parseInline(curLine.replace(/^[ \t]*[-*][ \t]+/, '').trim());
+              listItems.push(`<li>${content}</li>`);
+            }
+            i++;
+          }
+          const listClass = isTaskList ? ' class="task-list"' : '';
+          out.push(`<ul${listClass}>${listItems.join('')}</ul>`);
+          continue;
+        }
+
+        // 8. Ordered list
+        if (/^[ \t]*\d+\.[ \t]/.test(line)) {
+          const listItems = [];
+          while (i < lines.length && /^[ \t]*\d+\.[ \t]/.test(lines[i])) {
+            const content = parseInline(lines[i].replace(/^[ \t]*\d+\.[ \t]+/, '').trim());
+            listItems.push(`<li>${content}</li>`);
+            i++;
+          }
+          out.push(`<ol>${listItems.join('')}</ol>`);
+          continue;
+        }
+
+        // 9. Regular paragraph (group contiguous non-block lines)
+        const paraLines = [];
+        while (i < lines.length && lines[i].trim() !== '' &&
+               !/^(#{1,6})[ \t]+/.test(lines[i]) &&
+               !/^[ \t]*>/.test(lines[i]) &&
+               !/^[ \t]*\|.+?\|[ \t]*$/.test(lines[i]) &&
+               !/^[ \t]*[-*][ \t]/.test(lines[i]) &&
+               !/^[ \t]*\d+\.[ \t]/.test(lines[i]) &&
+               !/^[ \t]*(?:[-*_][ \t]*){3,}$/.test(lines[i]) &&
+               !/^%%BLOCK_CODE_/.test(lines[i].trim())) {
+          paraLines.push(parseInline(lines[i].trim()));
+          i++;
+        }
+        if (paraLines.length > 0) {
+          out.push(`<p>${paraLines.join('<br>')}</p>`);
+        }
       }
-      const parseCells = (l) => l.slice(1, -1).split('|').map(c => c.trim());
-      const headers = parseCells(lines[0]);
-      let tHtml = '<table><thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
-      for (let i = 2; i < lines.length; i++) {
-        const cells = parseCells(lines[i]);
-        tHtml += '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>';
-      }
-      tHtml += '</tbody></table>';
-      return '\n' + tHtml + '\n';
-    });
 
-    // Step 5: Headers
-    html = html.replace(/^######[ \t]+(.*)$/gm, '<h6>$1</h6>');
-    html = html.replace(/^#####[ \t]+(.*)$/gm, '<h5>$1</h5>');
-    html = html.replace(/^####[ \t]+(.*)$/gm, '<h4>$1</h4>');
-    html = html.replace(/^###[ \t]+(.*)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^##[ \t]+(.*)$/gm, '<h2>$1</h2>');
-    html = html.replace(/^#[ \t]+(.*)$/gm, '<h1>$1</h1>');
+      return out.join('\n');
+    }
 
-    // Step 6: Horizontal Rules
-    html = html.replace(/^[ \t]*(?:[-*_][ \t]*){3,}$/gm, '<hr>');
+    // Step 4: Parse blocks
+    let html = parseBlocks(text);
 
-    // Step 7: Blockquotes
-    html = html.replace(/(?:^[ \t]*>[ \t]?(?:.*)(?:\r?\n|$))+/gm, (match) => {
-      const inner = match.trim().split(/\r?\n/).map(l => l.replace(/^[ \t]*>[ \t]?/, '')).join('<br>');
-      return `<blockquote>${inner}</blockquote>`;
-    });
-
-    // Step 8: Task lists (- [ ] or - [x])
-    html = html.replace(/(?:^[ \t]*[-*][ \t]\[([ xX])\][ \t]+(.*?)(?:\r?\n|$))+/gm, (match) => {
-      const items = match.trim().split(/\r?\n/).map(line => {
-        const m = line.match(/^[ \t]*[-*][ \t]\[([ xX])\][ \t]+(.*)$/);
-        if (!m) return '';
-        const isChecked = m[1].toLowerCase() === 'x';
-        return `<li class="task-item"><input type="checkbox" ${isChecked ? 'checked' : ''} disabled> <span>${m[2]}</span></li>`;
-      }).filter(Boolean).join('');
-      return `<ul class="task-list">${items}</ul>`;
-    });
-
-    // Step 9: Unordered Lists
-    html = html.replace(/(?:^[ \t]*[-*][ \t]+(?!\<li class="task-item"|\[[ xX]\])(.*?)(?:\r?\n|$))+/gm, (match) => {
-      const items = match.trim().split(/\r?\n/).map(line => {
-        return `<li>${line.replace(/^[ \t]*[-*][ \t]+/, '')}</li>`;
-      }).join('');
-      return `<ul>${items}</ul>`;
-    });
-
-    // Step 10: Ordered Lists
-    html = html.replace(/(?:^[ \t]*\d+\.[ \t]+(.*?)(?:\r?\n|$))+/gm, (match) => {
-      const items = match.trim().split(/\r?\n/).map(line => {
-        return `<li>${line.replace(/^[ \t]*\d+\.[ \t]+/, '')}</li>`;
-      }).join('');
-      return `<ol>${items}</ol>`;
-    });
-
-    // Step 11: Links
-    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-
-    // Step 12: Bold, Italic, Strikethrough
-    html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
-    html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-    html = html.replace(/(^|[^\w])_([^_\r\n]+)_(?=[^\w]|$)/g, '$1<em>$2</em>');
-    html = html.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
-
-    // Step 13: Paragraphs
-    const blocks = html.split(/\r?\n\r?\n+/);
-    html = blocks.map(block => {
-      block = block.trim();
-      if (!block) return '';
-      if (block.startsWith('<h') || block.startsWith('<ul') || block.startsWith('<ol') ||
-          block.startsWith('<blockquote') || block.startsWith('<table') || block.startsWith('<hr') ||
-          block.startsWith('%%CODEBLOCK')) {
-        return block;
-      }
-      return `<p>${block.replace(/\r?\n/g, '<br>')}</p>`;
-    }).filter(Boolean).join('');
-
-    // Step 14: Restore code blocks
-    html = html.replace(/%%CODEBLOCK(\d+)%%/g, (match, id) => {
-      const block = codeBlocks[id];
-      if (!block) return '';
-      const langClass = block.lang ? ` class="lang-${block.lang}"` : '';
-      return `<pre><code${langClass}>${block.code}</code></pre>`;
-    });
-
-    // Step 15: Restore inline code
-    html = html.replace(/%%INLINECODE(\d+)%%/g, (match, id) => {
-      return `<code>${inlineCodes[id] || ''}</code>`;
+    // Step 5: Restore inline code
+    html = html.replace(/%%INLINE_CODE_(\d+)%%/g, (match, id) => {
+      const code = inlineCodes[parseInt(id, 10)] || '';
+      return `<code>${code}</code>`;
     });
 
     return html;
@@ -825,6 +918,8 @@
   function openNoteModal(editItem = null) {
     noteModal.style.display = 'flex';
     if (editItem) {
+      const flesh = (currentNoteDetail && (currentNoteDetail.id === editItem.id || currentNoteDetail.id.startsWith(editItem.id))) ? 
+        (currentNoteDetail.note_flesh || editItem.flesh || '') : (editItem.flesh || '');
       modalTitle.textContent = 'Edit Note';
       document.getElementById('form-note-id').value = editItem.id;
       document.getElementById('form-title').value = editItem.display;
@@ -832,7 +927,7 @@
       document.getElementById('form-status').value = editItem.status || 'active';
       document.getElementById('form-area').value = editItem.area || '';
       document.getElementById('form-tags').value = (editItem.tags || []).join(', ');
-      document.getElementById('form-flesh').value = editItem.flesh || '';
+      document.getElementById('form-flesh').value = flesh;
     } else {
       modalTitle.textContent = 'Create New Note';
       noteForm.reset();
