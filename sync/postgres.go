@@ -209,8 +209,8 @@ func (c *PostgresClient) PushLocalChanges(since time.Time) (*SyncStats, error) {
 		stats.NotesPushed++
 	}
 
-	// 2. Push Tags
-	localTags, err := db.GetAllTagsSince(since)
+	// 2. Push Tags (Ensure all local tags exist on remote)
+	localTags, err := db.GetAllTagsSince(time.Time{})
 	if err != nil {
 		return stats, fmt.Errorf("failed reading local tags: %w", err)
 	}
@@ -218,8 +218,7 @@ func (c *PostgresClient) PushLocalChanges(since time.Time) (*SyncStats, error) {
 		query := `
 			INSERT INTO tags (id, name, created_at)
 			VALUES ($1, $2, $3)
-			ON CONFLICT (name) DO UPDATE SET
-				name = EXCLUDED.name
+			ON CONFLICT (name) DO NOTHING
 		`
 		_, err := c.DB.Exec(query, t.ID, t.Name, t.CreatedAt)
 		if err != nil {
@@ -229,7 +228,13 @@ func (c *PostgresClient) PushLocalChanges(since time.Time) (*SyncStats, error) {
 	}
 
 	// 3. Push Note Tags
-	localNoteTags, err := db.GetAllNoteTagsSince(since)
+	// For any locally modified note, synchronize its exact tag set on PostgreSQL
+	for _, n := range localNotes {
+		// Clean existing remote note_tags for this modified note
+		_, _ = c.DB.Exec("DELETE FROM note_tags WHERE note_id = $1", n.ID)
+	}
+
+	localNoteTags, err := db.GetAllNoteTagsSince(time.Time{})
 	if err != nil {
 		return stats, fmt.Errorf("failed reading local note_tags: %w", err)
 	}
@@ -244,8 +249,8 @@ func (c *PostgresClient) PushLocalChanges(since time.Time) (*SyncStats, error) {
 		}
 	}
 
-	// 4. Push Links
-	localLinks, err := db.GetAllLinksSince(since)
+	// 4. Push Links (Push all links to ensure graph connections are complete)
+	localLinks, err := db.GetAllLinksSince(time.Time{})
 	if err != nil {
 		return stats, fmt.Errorf("failed reading local links: %w", err)
 	}
@@ -266,7 +271,7 @@ func (c *PostgresClient) PushLocalChanges(since time.Time) (*SyncStats, error) {
 				deleted_at = EXCLUDED.deleted_at,
 				deleted_note = EXCLUDED.deleted_note
 			WHERE (EXCLUDED.deleted_at IS NOT NULL AND (links.deleted_at IS NULL OR EXCLUDED.deleted_at >= links.deleted_at))
-			   OR (EXCLUDED.created_at >= links.created_at OR links.created_at IS NULL)
+			   OR (links.deleted_at IS NULL)
 		`
 		_, err := c.DB.Exec(query, l.ID, l.FromNote, l.ToNote, string(l.Type), l.CreatedAt, deletedDT, l.DeletedNote)
 		if err != nil {
@@ -350,6 +355,7 @@ func (c *PostgresClient) PullRemoteChanges(since time.Time) (*SyncStats, error) 
 	}
 	defer rows.Close()
 
+	var pulledNoteIDs []string
 	for rows.Next() {
 		var n models.Note
 		var targetDT sql.NullTime
@@ -370,21 +376,14 @@ func (c *PostgresClient) PullRemoteChanges(since time.Time) (*SyncStats, error) 
 		if err := db.UpsertRemoteNote(&n); err != nil {
 			return stats, fmt.Errorf("failed storing pulled note [%s]: %w", n.ID[:7], err)
 		}
+		pulledNoteIDs = append(pulledNoteIDs, n.ID)
 		stats.NotesPulled++
 	}
 	rows.Close()
 
-	// 2. Pull Tags
-	var tagQuery string
-	var tagArgs []interface{}
-	if since.IsZero() {
-		tagQuery = `SELECT id, name, created_at FROM tags`
-	} else {
-		tagQuery = `SELECT id, name, created_at FROM tags WHERE created_at > $1`
-		tagArgs = append(tagArgs, since)
-	}
-
-	tRows, err := c.DB.Query(tagQuery, tagArgs...)
+	// 2. Pull Tags (Always pull all tags to ensure every note_tag can be resolved by ID locally)
+	tagQuery := `SELECT id, name, created_at FROM tags`
+	tRows, err := c.DB.Query(tagQuery)
 	if err != nil {
 		return stats, fmt.Errorf("failed querying remote tags: %w", err)
 	}
@@ -406,17 +405,13 @@ func (c *PostgresClient) PullRemoteChanges(since time.Time) (*SyncStats, error) 
 	}
 	tRows.Close()
 
-	// 3. Pull Note Tags
-	var ntQuery string
-	var ntArgs []interface{}
-	if since.IsZero() {
-		ntQuery = `SELECT note_id, tag_id, created_at FROM note_tags`
-	} else {
-		ntQuery = `SELECT note_id, tag_id, created_at FROM note_tags WHERE created_at > $1`
-		ntArgs = append(ntArgs, since)
+	// 3. Pull Note Tags (For pulled notes, reset their tags locally to match remote; pull all active note_tags)
+	for _, noteID := range pulledNoteIDs {
+		_ = db.ClearNoteTagsForNote(noteID)
 	}
 
-	ntRows, err := c.DB.Query(ntQuery, ntArgs...)
+	ntQuery := `SELECT note_id, tag_id, created_at FROM note_tags`
+	ntRows, err := c.DB.Query(ntQuery)
 	if err != nil {
 		return stats, fmt.Errorf("failed querying remote note_tags: %w", err)
 	}
@@ -437,17 +432,9 @@ func (c *PostgresClient) PullRemoteChanges(since time.Time) (*SyncStats, error) 
 	}
 	ntRows.Close()
 
-	// 4. Pull Links
-	var lQuery string
-	var lArgs []interface{}
-	if since.IsZero() {
-		lQuery = `SELECT id, from_note, to_note, type, created_at, deleted_at, deleted_note FROM links`
-	} else {
-		lQuery = `SELECT id, from_note, to_note, type, created_at, deleted_at, deleted_note FROM links WHERE created_at > $1 OR (deleted_at IS NOT NULL AND deleted_at > $1)`
-		lArgs = append(lArgs, since)
-	}
-
-	lRows, err := c.DB.Query(lQuery, lArgs...)
+	// 4. Pull Links (Always pull all links to ensure graph connections are complete)
+	lQuery := `SELECT id, from_note, to_note, type, created_at, deleted_at, deleted_note FROM links`
+	lRows, err := c.DB.Query(lQuery)
 	if err != nil {
 		return stats, fmt.Errorf("failed querying remote links: %w", err)
 	}
@@ -558,7 +545,7 @@ func (c *PostgresClient) PullRemoteChanges(since time.Time) (*SyncStats, error) 
 	return stats, nil
 }
 
-// TwoWaySync performs a schema check, pushes local changes, pulls remote changes, and updates sync state.
+// TwoWaySync performs a schema check, pulls remote changes first (to align tag IDs and incoming changes), pushes local changes, and updates sync state.
 func (c *PostgresClient) TwoWaySync() (*SyncStats, error) {
 	start := time.Now()
 
@@ -573,14 +560,14 @@ func (c *PostgresClient) TwoWaySync() (*SyncStats, error) {
 		return nil, fmt.Errorf("failed reading sync state: %w", err)
 	}
 
-	// 3. Push local changes
-	pushStats, err := c.PushLocalChanges(lastSync)
+	// 3. Pull remote changes first to harmonize tag IDs and receive remote updates
+	pullStats, err := c.PullRemoteChanges(lastSync)
 	if err != nil {
 		return nil, err
 	}
 
-	// 4. Pull remote changes
-	pullStats, err := c.PullRemoteChanges(lastSync)
+	// 4. Push local changes
+	pushStats, err := c.PushLocalChanges(lastSync)
 	if err != nil {
 		return nil, err
 	}

@@ -227,15 +227,37 @@ func UpsertRemoteNote(n *models.Note) error {
 	return tx.Commit()
 }
 
-// UpsertRemoteTag inserts a tag if it doesn't already exist.
+// UpsertRemoteTag inserts a tag if it doesn't already exist or harmonizes tag IDs.
 func UpsertRemoteTag(t *models.Tag) error {
-	query := `
-		INSERT INTO tags (id, name, created_at)
-		VALUES (?, ?, ?)
-		ON CONFLICT(name) DO NOTHING
-	`
-	_, err := DB.Exec(query, t.ID, t.Name, t.CreatedAt)
-	return err
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var existingID string
+	err = tx.QueryRow("SELECT id FROM tags WHERE name = ?", t.Name).Scan(&existingID)
+	if err == sql.ErrNoRows {
+		_, err = tx.Exec("INSERT INTO tags (id, name, created_at) VALUES (?, ?, ?)", t.ID, t.Name, t.CreatedAt)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	} else if existingID != t.ID {
+		// Harmonize existing local note_tags to reference the remote tag ID
+		_, err = tx.Exec("UPDATE note_tags SET tag_id = ? WHERE tag_id = ?", t.ID, existingID)
+		if err != nil {
+			return err
+		}
+		// Update tag ID in tags table
+		_, err = tx.Exec("UPDATE tags SET id = ? WHERE name = ?", t.ID, t.Name)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 // UpsertRemoteNoteTag inserts a note-tag junction row if not present.
@@ -265,6 +287,8 @@ func UpsertRemoteLink(l *models.Link) error {
 			created_at = excluded.created_at,
 			deleted_at = excluded.deleted_at,
 			deleted_note = excluded.deleted_note
+		WHERE (excluded.deleted_at IS NOT NULL AND (links.deleted_at IS NULL OR excluded.deleted_at >= links.deleted_at))
+		   OR (links.deleted_at IS NULL)
 	`
 	_, err := DB.Exec(query, l.ID, l.FromNote, l.ToNote, l.Type, l.CreatedAt, deletedDT, l.DeletedNote)
 	return err

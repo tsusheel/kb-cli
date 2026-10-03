@@ -43,6 +43,9 @@ func AddTag(noteID string, tagName string) error {
 		return err
 	}
 
+	// Bump note's updated_at timestamp so sync picks up the modification
+	_, _ = tx.Exec("UPDATE notes SET updated_at = ? WHERE id = ?", now, fullNoteID)
+
 	return tx.Commit()
 }
 
@@ -118,11 +121,34 @@ func RemoveTag(noteID string, tagName string) error {
 		return err
 	}
 
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
 	query := `
 		DELETE FROM note_tags 
 		WHERE note_id = ? AND tag_id IN (SELECT id FROM tags WHERE name = ?)
 	`
-	_, err = DB.Exec(query, fullNoteID, tagName)
+	_, err = tx.Exec(query, fullNoteID, tagName)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	// Bump note's updated_at timestamp so sync picks up the removal
+	_, _ = tx.Exec("UPDATE notes SET updated_at = ? WHERE id = ?", now, fullNoteID)
+
+	return tx.Commit()
+}
+
+func ClearNoteTagsForNote(noteID string) error {
+	fullNoteID, err := ResolveID(noteID)
+	if err != nil {
+		fullNoteID = noteID
+	}
+	_, err = DB.Exec("DELETE FROM note_tags WHERE note_id = ?", fullNoteID)
 	return err
 }
 
