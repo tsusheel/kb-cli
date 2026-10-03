@@ -69,6 +69,9 @@
         <div id="preview-content" class="preview-content" style="display: none;">
           <!-- Preview Header -->
           <div class="preview-header">
+            <div class="preview-nav-bar mobile-only">
+              <button id="mobile-back-btn" class="btn btn-sm btn-secondary mobile-back-btn" title="Back to List">← Back to List</button>
+            </div>
             <div class="preview-title-row">
               <h1 id="preview-title" class="preview-title"></h1>
               <div class="preview-actions">
@@ -176,7 +179,9 @@
                 <option value="archived">Archived</option>
               </select>
             </div>
+          </div>
 
+          <div class="form-row">
             <div class="form-group form-col">
               <label for="form-area">Area</label>
               <input type="text" id="form-area" class="form-input" placeholder="work, personal...">

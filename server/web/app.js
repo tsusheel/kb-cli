@@ -15,10 +15,12 @@
   let isRawView = false;
 
   // DOM Elements
+  const appContainer = document.getElementById('app');
   const searchInput = document.getElementById('search-input');
   const clearSearchBtn = document.getElementById('clear-search-btn');
   const searchCount = document.getElementById('search-count');
   const resultsList = document.getElementById('results-list');
+  const mobileBackBtn = document.getElementById('mobile-back-btn');
   const previewEmpty = document.getElementById('preview-empty');
   const previewContent = document.getElementById('preview-content');
   const previewTitle = document.getElementById('preview-title');
@@ -53,6 +55,18 @@
   const modalTitle = document.getElementById('modal-title');
   const toast = document.getElementById('toast');
 
+  function showMobileDetail() {
+    if (window.innerWidth <= 768 && appContainer) {
+      appContainer.classList.add('mobile-show-preview');
+    }
+  }
+
+  function showMobileList() {
+    if (appContainer) {
+      appContainer.classList.remove('mobile-show-preview');
+    }
+  }
+
   // Initialize
   async function init() {
     setupEventListeners();
@@ -63,6 +77,12 @@
 
   // Event Listeners
   function setupEventListeners() {
+    if (mobileBackBtn) {
+      mobileBackBtn.addEventListener('click', () => {
+        showMobileList();
+      });
+    }
+
     searchInput.addEventListener('input', () => {
       clearSearchBtn.style.display = searchInput.value ? 'block' : 'none';
       filterAndRender();
@@ -105,6 +125,7 @@
       const index = parseInt(itemEl.dataset.index, 10);
       if (!isNaN(index)) {
         selectItem(index);
+        showMobileDetail();
       }
     });
 
@@ -186,6 +207,9 @@
     if (e.key === 'Escape') {
       if (isModalOpen) {
         closeNoteModal();
+        e.preventDefault();
+      } else if (appContainer && appContainer.classList.contains('mobile-show-preview')) {
+        showMobileList();
         e.preventDefault();
       } else if (searchInput.value) {
         searchInput.value = '';
@@ -907,6 +931,7 @@
       });
       if (res.ok) {
         showToast(`Note soft-deleted`);
+        showMobileList();
         await loadData();
       }
     } catch (err) {
@@ -920,12 +945,15 @@
     if (editItem) {
       const flesh = (currentNoteDetail && (currentNoteDetail.id === editItem.id || currentNoteDetail.id.startsWith(editItem.id))) ? 
         (currentNoteDetail.note_flesh || editItem.flesh || '') : (editItem.flesh || '');
+      const dueVal = (currentNoteDetail && (currentNoteDetail.id === editItem.id || currentNoteDetail.id.startsWith(editItem.id)) && currentNoteDetail.target_date_time) ? 
+        currentNoteDetail.target_date_time.split('T')[0] : (editItem.due || (editItem.target_date_time ? editItem.target_date_time.split('T')[0] : ''));
       modalTitle.textContent = 'Edit Note';
       document.getElementById('form-note-id').value = editItem.id;
       document.getElementById('form-title').value = editItem.display;
       document.getElementById('form-type').value = editItem.type || 'note';
       document.getElementById('form-status').value = editItem.status || 'active';
       document.getElementById('form-area').value = editItem.area || '';
+      document.getElementById('form-due').value = dueVal;
       document.getElementById('form-tags').value = (editItem.tags || []).join(', ');
       document.getElementById('form-flesh').value = flesh;
     } else {
