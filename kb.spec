@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           kb
-Version:        0.1.2
+Version:        0.1.3
 Release:        1%{?dist}
 Summary:        Knowledge Base CLI
 
@@ -37,6 +37,11 @@ fi
 %{_bindir}/kb
 
 %changelog
+* Sun Oct 04 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.3-1
+- Implement incremental delta sync and batch entity synchronization
+- Add parallel entity fetch queries and atomic transaction processing
+- Add comprehensive unit tests for sync optimizations
+
 * Sun Oct 04 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.2-1
 - Add Cache-Control and CDN anti-stale headers for static assets
 - Add post-upgrade service restart trigger
