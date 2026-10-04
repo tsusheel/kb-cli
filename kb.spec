@@ -1,3 +1,5 @@
+%global debug_package %{nil}
+
 Name:           kb
 Version:        0.1.0
 Release:        1%{?dist}
@@ -25,3 +27,8 @@ install -D -p -m 0755 bin/kb %{buildroot}%{_bindir}/kb
 %license LICENSE
 %doc README.md
 %{_bindir}/kb
+
+%changelog
+* Sun Oct 04 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.0-1
+- Initial package release
+
