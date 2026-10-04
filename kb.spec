@@ -16,7 +16,7 @@ Knowledge Base CLI tool for managing notes and tasks.
 %autosetup -n kb-cli-%{version}
 
 %build
-go build -ldflags="-s -w" -o bin/kb main.go
+go build -mod=vendor -ldflags="-s -w" -o bin/kb main.go
 
 %install
 install -D -p -m 0755 bin/kb %{buildroot}%{_bindir}/kb
