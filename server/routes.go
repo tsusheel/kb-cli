@@ -24,14 +24,19 @@ var embeddedFiles embed.FS
 func RegisterRoutes() http.Handler {
 	mux := http.NewServeMux()
 
-	// API Routes
-	mux.HandleFunc("/api/items", handleGetItems)
-	mux.HandleFunc("/api/notes", handleNotesCollection)
-	mux.HandleFunc("/api/notes/", handleNoteResource)
-	mux.HandleFunc("/api/logs", handleLogsCollection)
-	mux.HandleFunc("/api/stats", handleGetStats)
-	mux.HandleFunc("/api/tags", handleGetTags)
-	mux.HandleFunc("/api/sync", handleSync)
+	// Auth Routes
+	mux.HandleFunc("/api/auth/login", handleAuthLogin)
+	mux.HandleFunc("/api/auth/status", handleAuthStatus)
+	mux.HandleFunc("/api/auth/logout", handleAuthLogout)
+
+	// Protected API Routes
+	mux.HandleFunc("/api/items", requireAuth(handleGetItems))
+	mux.HandleFunc("/api/notes", requireAuth(handleNotesCollection))
+	mux.HandleFunc("/api/notes/", requireAuth(handleNoteResource))
+	mux.HandleFunc("/api/logs", requireAuth(handleLogsCollection))
+	mux.HandleFunc("/api/stats", requireAuth(handleGetStats))
+	mux.HandleFunc("/api/tags", requireAuth(handleGetTags))
+	mux.HandleFunc("/api/sync", requireAuth(handleSync))
 
 	// Static Web Assets
 	webFS, err := fs.Sub(embeddedFiles, "web")

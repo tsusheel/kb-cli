@@ -55,6 +55,17 @@
   const modalTitle = document.getElementById('modal-title');
   const toast = document.getElementById('toast');
 
+  // Auth Elements & State
+  const logoutBtn = document.getElementById('logout-btn');
+  const authModal = document.getElementById('auth-modal');
+  const authForm = document.getElementById('auth-form');
+  const authPassword = document.getElementById('auth-password');
+  const togglePasswordBtn = document.getElementById('toggle-password-btn');
+  const authError = document.getElementById('auth-error');
+  const authSubmitBtn = document.getElementById('auth-submit-btn');
+  let isAuthenticated = false;
+  let isAuthRequired = false;
+
   function showMobileDetail() {
     if (window.innerWidth <= 768 && appContainer) {
       appContainer.classList.add('mobile-show-preview');
@@ -67,12 +78,64 @@
     }
   }
 
+  function showAuthModal() {
+    if (authModal) {
+      authModal.style.display = 'flex';
+      if (authError) authError.style.display = 'none';
+      if (authPassword) {
+        authPassword.value = '';
+        setTimeout(() => authPassword.focus(), 50);
+      }
+    }
+  }
+
+  function hideAuthModal() {
+    if (authModal) {
+      authModal.style.display = 'none';
+    }
+  }
+
+  async function apiFetch(url, options = {}) {
+    const res = await fetch(url, options);
+    if (res.status === 401) {
+      isAuthenticated = false;
+      if (logoutBtn) logoutBtn.style.display = 'none';
+      showAuthModal();
+      throw new Error('Authentication required');
+    }
+    return res;
+  }
+
+  async function checkAuthStatus() {
+    try {
+      const res = await fetch('/api/auth/status');
+      if (res.ok) {
+        const data = await res.json();
+        isAuthenticated = data.authenticated;
+        isAuthRequired = data.auth_required;
+        if (logoutBtn) {
+          logoutBtn.style.display = (isAuthenticated && isAuthRequired) ? 'inline-flex' : 'none';
+        }
+        if (!isAuthenticated && isAuthRequired) {
+          showAuthModal();
+          return false;
+        }
+      }
+    } catch (e) {
+      console.warn('Auth status check failed:', e);
+    }
+    return true;
+  }
+
   // Initialize
   async function init() {
     setupEventListeners();
-    await loadData();
-    await loadTags();
-    await loadStats();
+    const canLoad = await checkAuthStatus();
+    if (canLoad) {
+      await loadData();
+      await loadTags();
+      await loadStats();
+    }
   }
 
   // Event Listeners
@@ -140,7 +203,7 @@
         syncBtn.textContent = 'Syncing...';
         showToast('Syncing data...');
         try {
-          const res = await fetch('/api/sync', { method: 'POST' });
+          const res = await apiFetch('/api/sync', { method: 'POST' });
           const data = await res.json();
           if (data.success) {
             showToast(data.message || 'Sync complete');
@@ -155,6 +218,85 @@
           await loadData();
           await loadTags();
           await loadStats();
+        }
+      });
+    }
+
+    // Auth Listeners
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', async () => {
+        try {
+          await fetch('/api/auth/logout', { method: 'POST' });
+        } catch (e) {
+          console.warn(e);
+        }
+        isAuthenticated = false;
+        logoutBtn.style.display = 'none';
+        allItems = [];
+        filteredItems = [];
+        resultsList.innerHTML = '<div class="empty-list">Locked. Please authenticate to view notes.</div>';
+        renderEmptyPreview();
+        showAuthModal();
+        showToast('Signed out');
+      });
+    }
+
+    if (togglePasswordBtn && authPassword) {
+      togglePasswordBtn.addEventListener('click', () => {
+        const isPassword = authPassword.type === 'password';
+        authPassword.type = isPassword ? 'text' : 'password';
+        togglePasswordBtn.textContent = isPassword ? '🔒' : '👁';
+      });
+    }
+
+    if (authForm) {
+      authForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const password = authPassword.value;
+        if (!password) return;
+
+        authSubmitBtn.disabled = true;
+        authSubmitBtn.textContent = 'Unlocking...';
+        if (authError) authError.style.display = 'none';
+
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+          });
+          const data = await res.json();
+
+          if (res.ok && data.authenticated) {
+            isAuthenticated = true;
+            isAuthRequired = data.auth_required !== false;
+            hideAuthModal();
+            if (logoutBtn) {
+              logoutBtn.style.display = isAuthRequired ? 'inline-flex' : 'none';
+            }
+            showToast('Knowledge Base unlocked');
+            await loadData();
+            await loadTags();
+            await loadStats();
+            if (searchInput) searchInput.focus();
+          } else {
+            if (authError) {
+              authError.textContent = data.error || 'Incorrect password. Please try again.';
+              authError.style.display = 'block';
+            }
+            if (authPassword) {
+              authPassword.select();
+              authPassword.focus();
+            }
+          }
+        } catch (err) {
+          if (authError) {
+            authError.textContent = `Connection error: ${err.message}`;
+            authError.style.display = 'block';
+          }
+        } finally {
+          authSubmitBtn.disabled = false;
+          authSubmitBtn.textContent = 'Unlock';
         }
       });
     }
@@ -287,7 +429,7 @@
   async function loadData() {
     try {
       const includeDeleted = activeTypeFilter === 'archived';
-      const res = await fetch(`/api/items?include_deleted=${includeDeleted}`);
+      const res = await apiFetch(`/api/items?include_deleted=${includeDeleted}`);
       if (!res.ok) throw new Error('Failed to load items');
       allItems = await res.json();
       updateCounts();
@@ -300,7 +442,7 @@
 
   async function loadTags() {
     try {
-      const res = await fetch('/api/tags');
+      const res = await apiFetch('/api/tags');
       if (!res.ok) return;
       const tags = await res.json();
       if (!tags || tags.length === 0) {
@@ -319,7 +461,7 @@
 
   async function loadStats() {
     try {
-      const res = await fetch('/api/stats');
+      const res = await apiFetch('/api/stats');
       if (!res.ok) return;
       const stats = await res.json();
       if (stats) {
@@ -536,7 +678,7 @@
 
     if (!item.is_log) {
       try {
-        const res = await fetch(`/api/notes/${item.id}`);
+        const res = await apiFetch(`/api/notes/${item.id}`);
         if (res.ok) {
           currentNoteDetail = await res.json();
           renderPreviewDetail(currentNoteDetail);
@@ -902,7 +1044,7 @@
 
     const newStatus = item.status === 'completed' ? 'active' : 'completed';
     try {
-      const res = await fetch(`/api/notes/${item.id}`, {
+      const res = await apiFetch(`/api/notes/${item.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -924,7 +1066,7 @@
     if (!confirm(`Are you sure you want to soft-delete "${item.display}"?`)) return;
 
     try {
-      const res = await fetch(`/api/notes/${item.id}`, {
+      const res = await apiFetch(`/api/notes/${item.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: 'deleted from web UI' })
@@ -993,7 +1135,7 @@
     try {
       if (noteId) {
         // Edit existing
-        const res = await fetch(`/api/notes/${noteId}`, {
+        const res = await apiFetch(`/api/notes/${noteId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -1002,7 +1144,7 @@
         showToast('Note updated successfully');
       } else {
         // Create new
-        const res = await fetch('/api/notes', {
+        const res = await apiFetch('/api/notes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)

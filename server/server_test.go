@@ -9,16 +9,26 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/tsusheel/kb-cli/db"
 	"github.com/tsusheel/kb-cli/models"
+	"github.com/tsusheel/kb-cli/utils"
+	"github.com/zalando/go-keyring"
 )
 
 func setupTestDB(t *testing.T) {
 	tempDir := t.TempDir()
+	viper.Set("base_path", tempDir)
+	viper.Set("server.password", "")
+	keyring.MockInit()
+	_ = keyring.Delete(utils.ServiceName, "postgres_password")
+	defaultSessionStore.ClearAll()
+
 	dbPath := filepath.Join(tempDir, "server_test.db")
 	db.InitDB(dbPath)
 	t.Cleanup(func() {
 		db.CloseDB()
+		defaultSessionStore.ClearAll()
 	})
 	if err := db.InitSchema(); err != nil {
 		t.Fatalf("failed to init schema: %v", err)

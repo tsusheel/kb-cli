@@ -31,6 +31,7 @@
       <div class="header-actions">
         <button id="new-note-btn" class="btn btn-primary" title="New Note (N)">+ New</button>
         <button id="sync-btn" class="btn btn-secondary" title="Sync Database">Sync</button>
+        <button id="logout-btn" class="btn btn-secondary btn-icon-only" title="Sign Out / Lock" style="display: none;">🔒</button>
       </div>
     </header>
 
@@ -206,6 +207,37 @@
           <div class="modal-footer">
             <button type="button" id="modal-cancel-btn" class="btn btn-secondary">Cancel</button>
             <button type="submit" id="modal-submit-btn" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Authentication Modal Overlay -->
+    <div id="auth-modal" class="modal-backdrop auth-backdrop" style="display: none;">
+      <div class="modal-card auth-card">
+        <div class="auth-header">
+          <div class="auth-icon-badge">🔒</div>
+          <h2 class="auth-title">Knowledge Base</h2>
+          <p class="auth-subtitle">Enter your database / access password to unlock</p>
+        </div>
+        <form id="auth-form" class="modal-form">
+          <div class="form-group">
+            <label for="auth-password">Password</label>
+            <div class="auth-password-wrapper">
+              <input 
+                type="password" 
+                id="auth-password" 
+                class="form-input" 
+                placeholder="Enter password..." 
+                autocomplete="current-password" 
+                required
+              >
+              <button type="button" id="toggle-password-btn" class="btn-toggle-pw" title="Show / Hide Password">👁</button>
+            </div>
+          </div>
+          <div id="auth-error" class="auth-error-msg" style="display: none;"></div>
+          <div class="modal-footer auth-footer">
+            <button type="submit" id="auth-submit-btn" class="btn btn-primary btn-full">Unlock</button>
           </div>
         </form>
       </div>
