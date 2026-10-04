@@ -23,7 +23,7 @@ nfpms:
     package_name: kb
     vendor: tsusheel
     homepage: https://github.com/tsusheel/kb-cli
-    maintainer: "Your Name <you@example.com>"
+    maintainer: "Sushil Thakur <tsusheel.135@gmail.com>"
     description: "Knowledge Base CLI"
     license: MIT
     formats:
@@ -40,6 +40,35 @@ archives:
       - goos: windows
         format: zip
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+aurs:
+  - name: kb-bin
+    homepage: https://github.com/tsusheel/kb-cli
+    description: "Knowledge Base CLI"
+    maintainers:
+      - "Sushil Thakur <tsusheel.135@gmail.com>"
+    license: MIT
+    private_key: "${{ secrets.AUR_SSH_PRIVATE_KEY }}"
+    git_url: "ssh://aur@aur.archlinux.org/kb-bin.git"
+    package: |-
+      install -Dm755 "${srcdir}/kb" "${pkgdir}/usr/bin/kb"
+
+brews:
+  - name: kb
+    repository:
+      owner: tsusheel
+      name: homebrew-tap
+      token: "${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/tsusheel/kb-cli
+    description: "Knowledge Base CLI"
+    license: MIT
+
+scoops:
+  - name: kb
+    repository:
+      owner: tsusheel
+      name: scoop-bucket
+      token: "${{ secrets.SCOOP_TAP_GITHUB_TOKEN }}"
 
 changelog:
   sort: asc
