@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           kb
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Knowledge Base CLI
 
@@ -30,6 +30,9 @@ install -D -p -m 0755 bin/kb %{buildroot}%{_bindir}/kb
 %{_bindir}/kb
 
 %changelog
+* Sun Oct 04 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.1-1
+- Add web UI authentication, session persistence, and logout support
+
 * Sun Oct 04 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.0-1
 - Initial package release
 
