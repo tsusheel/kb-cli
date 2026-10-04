@@ -1,0 +1,49 @@
+version: 2
+
+project_name: kb
+
+builds:
+  - id: kb
+    main: ./main.go
+    binary: kb
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+nfpms:
+  - id: packages
+    package_name: kb
+    vendor: tsusheel
+    homepage: https://github.com/tsusheel/kb-cli
+    maintainer: "Your Name <you@example.com>"
+    description: "Knowledge Base CLI"
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
+    section: utils
+
+archives:
+  - id: default
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
