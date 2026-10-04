@@ -59,6 +59,11 @@ func RegisterRoutes() http.Handler {
 			// Fallback to index.html for SPA routing
 			r.URL.Path = "/"
 		}
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		w.Header().Set("Cloudflare-CDN-Cache-Control", "no-store")
+		w.Header().Set("CDN-Cache-Control", "no-store")
 		fileServer.ServeHTTP(w, r)
 	})
 
