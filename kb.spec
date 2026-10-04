@@ -10,6 +10,7 @@ URL:            https://github.com/tsusheel/kb-cli
 Source0:        https://github.com/tsusheel/kb-cli/archive/v%{version}.tar.gz
 
 BuildRequires:  golang
+BuildRequires:  git
 
 %description
 Knowledge Base CLI tool for managing notes and tasks.
