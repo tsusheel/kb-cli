@@ -28,8 +28,8 @@
 
             src = ./.;
 
-            # Placeholder hash; updated to exact SRI hash via Nix CI
-            vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+            # Exact Go vendor modules SRI hash
+            vendorHash = "sha256-e8m/TiCWWh1T/EHhOdbcUW1XNRqVrFiVqOrmNVEemD4=";
 
             subPackages = [ "." ];
 
