@@ -1,0 +1,32 @@
+name: Nix
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+
+jobs:
+  build:
+    name: Nix Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Check Flake
+        run: nix flake check
+
+      - name: Build Package
+        run: nix build .#default
+
+      - name: Verify Binary
+        run: ./result/bin/kb --help
