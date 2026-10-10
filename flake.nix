@@ -39,6 +39,13 @@
               "-X main.version=${version}"
             ];
 
+            postInstall = ''
+              if [ -f $out/bin/kb-cli ] && [ ! -f $out/bin/kb ]; then
+                mv $out/bin/kb-cli $out/bin/kb
+              fi
+              ln -s kb $out/bin/kb-cli
+            '';
+
             meta = with pkgs.lib; {
               description = "Knowledge Base CLI tool for managing notes and tasks";
               homepage = "https://github.com/tsusheel/kb-cli";
