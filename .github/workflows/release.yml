@@ -69,16 +69,7 @@ jobs:
           mkdir -p ./apt-repo/conf
           if [ ! -f ./apt-repo/conf/distributions ]; then
             echo "Creating reprepro distributions configuration..."
-            cat <<'EOF' > ./apt-repo/conf/distributions
-Origin: tsusheel
-Label: kb
-Codename: stable
-Architectures: amd64 arm64
-Components: main
-Description: Knowledge Base CLI APT Repository
-SignWith: default
-EOF
-            sed -i "s/SignWith: default/SignWith: $GPG_KEY_ID/" ./apt-repo/conf/distributions
+            printf "Origin: tsusheel\nLabel: kb\nCodename: stable\nArchitectures: amd64 arm64\nComponents: main\nDescription: Knowledge Base CLI APT Repository\nSignWith: %s\n" "$GPG_KEY_ID" > ./apt-repo/conf/distributions
           fi
 
           # Export public key to repository root
