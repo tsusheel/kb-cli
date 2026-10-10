@@ -49,7 +49,7 @@ jobs:
           fi
 
           echo "Setting up Debian repository tools..."
-          sudo apt-get update && sudo apt-get install -y reprepro gnupg awscli
+          sudo apt-get update && sudo apt-get install -y reprepro gnupg
 
           echo "Importing GPG signing key..."
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
