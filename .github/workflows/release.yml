@@ -20,7 +20,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: 'stable'
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
@@ -30,3 +30,72 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Cloudflare R2 APT Repository
+        if: success()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+        run: |
+          # Check if R2 and GPG secrets are configured
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_ENDPOINT" ] || [ -z "$R2_BUCKET" ] || [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "::notice ::Cloudflare R2 or GPG secrets are not fully configured yet. Skipping APT repository sync."
+            exit 0
+          fi
+
+          echo "Setting up Debian repository tools..."
+          sudo apt-get update && sudo apt-get install -y reprepro gnupg awscli
+
+          echo "Importing GPG signing key..."
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+          # Auto-detect Key ID if not explicitly specified
+          if [ -z "$GPG_KEY_ID" ]; then
+            GPG_KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5; exit}')
+          fi
+          echo "Using GPG Key ID: $GPG_KEY_ID"
+
+          # Pull existing repository state from Cloudflare R2
+          mkdir -p ./apt-repo
+          echo "Syncing existing repo from Cloudflare R2..."
+          aws s3 sync "s3://${R2_BUCKET}" ./apt-repo --endpoint-url "$R2_ENDPOINT" || true
+
+          # Initialize distributions config if first run
+          mkdir -p ./apt-repo/conf
+          if [ ! -f ./apt-repo/conf/distributions ]; then
+            echo "Creating reprepro distributions configuration..."
+            cat <<'EOF' > ./apt-repo/conf/distributions
+Origin: tsusheel
+Label: kb
+Codename: stable
+Architectures: amd64 arm64
+Components: main
+Description: Knowledge Base CLI APT Repository
+SignWith: default
+EOF
+            sed -i "s/SignWith: default/SignWith: $GPG_KEY_ID/" ./apt-repo/conf/distributions
+          fi
+
+          # Export public key to repository root
+          gpg --armor --export "$GPG_KEY_ID" > ./apt-repo/KEY.gpg
+
+          # Add newly built .deb packages to repository
+          for deb in dist/*.deb; do
+            if [ -f "$deb" ]; then
+              echo "Including $deb into stable..."
+              reprepro -b ./apt-repo includedeb stable "$deb"
+            fi
+          done
+
+          # Sync updated repository and manifests back to Cloudflare R2
+          echo "Syncing updated repository to Cloudflare R2..."
+          aws s3 sync ./apt-repo "s3://${R2_BUCKET}" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --delete \
+            --cache-control "public, max-age=300"
+          echo "Successfully published APT repository to Cloudflare R2!"

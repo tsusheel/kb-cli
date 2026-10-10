@@ -26,14 +26,42 @@ Designed around a **two-speed capture philosophy**: capture fleeting thoughts in
 
 ---
 
-## Installation & Building
+## Installation & Distribution
 
-### Prerequisites
+### 1. Quick Install (All Linux Distributions & macOS)
 
+Run the automated installer script:
+```bash
+curl -fsSL https://raw.githubusercontent.com/tsusheel/kb-cli/main/install.sh | bash
+```
+
+### 2. Native Package Managers
+
+* **Ubuntu / Debian / Linux Mint / Pop!_OS (`apt`)**:
+  Via Cloudflare R2 APT Repository:
+  ```bash
+  # 1. Add GPG Key
+  curl -fsSL https://apt.tsusheel.com/KEY.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/kb.gpg > /dev/null
+
+  # 2. Add Repository
+  echo "deb [signed-by=/etc/apt/keyrings/kb.gpg] https://apt.tsusheel.com stable main" | sudo tee /etc/apt/sources.list.d/kb.list
+
+  # 3. Install & auto-update
+  sudo apt update && sudo apt install kb
+  ```
+
+* **Fedora / RHEL / CentOS / Amazon Linux / Rocky (`dnf`)**:
+  Via **Fedora COPR**:
+  ```bash
+  sudo dnf copr enable tsusheel/kb
+  sudo dnf install kb
+  ```
+
+### 3. Build from Source
+
+#### Prerequisites
 - **Go 1.21+** installed ([Download Go](https://go.dev/dl/))
 - **CGO is NOT required** (uses pure-Go drivers `modernc.org/sqlite` and `pgx/v5`)
-
-### 1. Build from Source
 
 ```bash
 # Clone the repository
