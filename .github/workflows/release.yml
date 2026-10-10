@@ -22,6 +22,11 @@ jobs:
         with:
           go-version: 'stable'
 
+      - name: Clean up partial release if exists
+        run: gh release delete "${{ github.ref_name }}" -y || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -40,7 +45,6 @@ jobs:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
         run: |
           # Check if R2 and GPG secrets are configured
           if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$R2_ENDPOINT" ] || [ -z "$R2_BUCKET" ] || [ -z "$GPG_PRIVATE_KEY" ]; then
@@ -54,10 +58,8 @@ jobs:
           echo "Importing GPG signing key..."
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
 
-          # Auto-detect Key ID if not explicitly specified
-          if [ -z "$GPG_KEY_ID" ]; then
-            GPG_KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^sec:/ {print $5; exit}')
-          fi
+          # Auto-detect Key ID from imported GPG keyring
+          GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG --with-colons | awk -F: '/^sec:/ {print $5; exit}')
           echo "Using GPG Key ID: $GPG_KEY_ID"
 
           # Pull existing repository state from Cloudflare R2
