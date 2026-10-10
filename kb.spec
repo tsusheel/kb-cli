@@ -37,6 +37,9 @@ fi
 %{_bindir}/kb
 
 %changelog
+* Sat Oct 10 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.4-1
+- Release v0.1.4 with Cloudflare R2 APT repository and Fedora Copr package updates
+
 * Sun Oct 04 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.3-1
 - Implement incremental delta sync and batch entity synchronization
 - Add parallel entity fetch queries and atomic transaction processing
