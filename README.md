@@ -53,8 +53,18 @@ curl -fsSL https://raw.githubusercontent.com/tsusheel/kb-cli/main/install.sh | b
 * **Fedora / RHEL / CentOS / Amazon Linux / Rocky (`dnf`)**:
   Via **Fedora COPR**:
   ```bash
-  sudo dnf copr enable tsusheel/kb
+  sudo dnf copr enable tsusheel/kb-cli
   sudo dnf install kb
+  ```
+
+* **Nix / NixOS (`nix`)**:
+  Run instantly without installing:
+  ```bash
+  nix run github:tsusheel/kb-cli
+  ```
+  Install permanently into your Nix profile:
+  ```bash
+  nix profile install github:tsusheel/kb-cli
   ```
 
 ### 3. Build from Source
