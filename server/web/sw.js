@@ -3,7 +3,7 @@
  * Caches app shell for offline use and caches read-only API requests (items, tags, stats)
  */
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const SHELL_CACHE = `kb-shell-${CACHE_VERSION}`;
 const DATA_CACHE = `kb-data-${CACHE_VERSION}`;
 
@@ -12,6 +12,9 @@ const SHELL_ASSETS = [
   '/index.html',
   '/style.css',
   '/app.js',
+  '/assets/lib/github-dark.min.css',
+  '/assets/lib/highlight.min.js',
+  '/assets/lib/mermaid.min.js',
   '/assets/site.webmanifest',
   '/manifest.json',
   '/assets/favicon.ico',

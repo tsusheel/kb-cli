@@ -53,6 +53,10 @@
   const modalCloseBtn = document.getElementById('modal-close-btn');
   const modalCancelBtn = document.getElementById('modal-cancel-btn');
   const modalTitle = document.getElementById('modal-title');
+  const modalTabWrite = document.getElementById('modal-tab-write');
+  const modalTabPreview = document.getElementById('modal-tab-preview');
+  const modalFleshPreview = document.getElementById('modal-flesh-preview');
+  const formFlesh = document.getElementById('form-flesh');
   const toast = document.getElementById('toast');
   let toastTimer = null;
 
@@ -135,6 +139,7 @@
 
   // Initialize
   async function init() {
+    initMarkdownLibraries();
     initPWA();
     setupEventListeners();
     const canLoad = await checkAuthStatus();
@@ -443,6 +448,61 @@
     noteForm.addEventListener('submit', handleNoteFormSubmit);
     noteModal.addEventListener('click', (e) => {
       if (e.target === noteModal) closeNoteModal();
+    });
+
+    // Modal Write / Preview Tabs
+    if (modalTabWrite && modalTabPreview && formFlesh && modalFleshPreview) {
+      modalTabWrite.addEventListener('click', () => {
+        modalTabPreview.classList.remove('active');
+        modalTabWrite.classList.add('active');
+        modalFleshPreview.style.display = 'none';
+        formFlesh.style.display = 'block';
+        formFlesh.focus();
+      });
+
+      modalTabPreview.addEventListener('click', () => {
+        modalTabWrite.classList.remove('active');
+        modalTabPreview.classList.add('active');
+        formFlesh.style.display = 'none';
+        modalFleshPreview.style.display = 'block';
+        const content = formFlesh.value;
+        modalFleshPreview.innerHTML = renderMarkdown(content);
+        applyPostMarkdownEnhancements(modalFleshPreview);
+      });
+    }
+
+    // Delegated Code Block & Diagram Copy Handler
+    document.addEventListener('click', async (e) => {
+      const copyBtn = e.target.closest('.code-copy-btn');
+      if (!copyBtn) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const wrapper = copyBtn.closest('.code-block-wrapper, .mermaid-block-wrapper');
+      if (!wrapper) return;
+
+      let textToCopy = '';
+      const mermaidDiag = wrapper.querySelector('.mermaid-diagram');
+      if (mermaidDiag) {
+        textToCopy = mermaidDiag.getAttribute('data-raw-code') || mermaidDiag.textContent;
+      } else {
+        const codeEl = wrapper.querySelector('pre code');
+        textToCopy = codeEl ? codeEl.textContent : '';
+      }
+
+      if (!textToCopy) return;
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(textToCopy);
+        } else {
+          copyTextFallback(textToCopy);
+        }
+        triggerCopyFeedback(copyBtn);
+      } catch (err) {
+        copyTextFallback(textToCopy);
+        triggerCopyFeedback(copyBtn);
+      }
     });
   }
 
@@ -847,7 +907,10 @@
 
     const rawContent = (item.flesh || item.display || '').trim();
     if (previewRawBody) previewRawBody.textContent = rawContent;
-    if (previewMarkdownBody) previewMarkdownBody.innerHTML = renderMarkdown(rawContent);
+    if (previewMarkdownBody) {
+      previewMarkdownBody.innerHTML = renderMarkdown(rawContent);
+      applyPostMarkdownEnhancements(previewMarkdownBody);
+    }
     updateViewModeDisplay();
 
     previewGraphSection.style.display = 'none';
@@ -873,7 +936,10 @@
 
     const rawContent = (note.note_flesh || note.note || '').trim();
     if (previewRawBody) previewRawBody.textContent = rawContent;
-    if (previewMarkdownBody) previewMarkdownBody.innerHTML = renderMarkdown(rawContent);
+    if (previewMarkdownBody) {
+      previewMarkdownBody.innerHTML = renderMarkdown(rawContent);
+      applyPostMarkdownEnhancements(previewMarkdownBody);
+    }
 
     // Graph Links
     if (note.links && note.links.length > 0) {
@@ -937,14 +1003,14 @@
     const codeBlocks = [];
     text = text.replace(/(?:^|\n)```([a-zA-Z0-9_+-]*)\n([\s\S]*?)\n```/g, (match, lang, code) => {
       const id = codeBlocks.length;
-      codeBlocks.push({ lang: lang.trim(), code: escapeHtml(code) });
+      codeBlocks.push({ lang: lang.trim(), rawCode: code, escapedCode: escapeHtml(code) });
       return `\n\n%%BLOCK_CODE_${id}%%\n\n`;
     });
 
     // Handle code blocks at EOF without trailing newline
     text = text.replace(/(?:^|\n)```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```$/g, (match, lang, code) => {
       const id = codeBlocks.length;
-      codeBlocks.push({ lang: lang.trim(), code: escapeHtml(code) });
+      codeBlocks.push({ lang: lang.trim(), rawCode: code, escapedCode: escapeHtml(code) });
       return `\n\n%%BLOCK_CODE_${id}%%\n\n`;
     });
 
@@ -998,8 +1064,62 @@
           const id = parseInt(codeBlockMatch[1], 10);
           const block = codeBlocks[id];
           if (block) {
-            const langClass = block.lang ? ` class="lang-${block.lang}"` : '';
-            out.push(`<pre><code${langClass}>${block.code}</code></pre>`);
+            const rawLang = (block.lang || '').toLowerCase();
+            if (rawLang === 'mermaid') {
+              const safeRaw = escapeHtml(block.rawCode.trim());
+              out.push(`
+                <div class="mermaid-block-wrapper">
+                  <div class="mermaid-block-header">
+                    <div class="mermaid-header-left">
+                      <span class="mermaid-tag">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                        Mermaid Diagram
+                      </span>
+                      <span class="zoom-level-badge">100%</span>
+                    </div>
+                    <div class="mermaid-header-actions">
+                      <button type="button" class="diagram-btn zoom-in-btn" title="Zoom In (+)" aria-label="Zoom In">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                      <button type="button" class="diagram-btn zoom-out-btn" title="Zoom Out (-)" aria-label="Zoom Out">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      </button>
+                      <button type="button" class="diagram-btn zoom-reset-btn" title="Reset View (Double-click)" aria-label="Reset View">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+                      </button>
+                      <button type="button" class="diagram-btn fullscreen-btn" title="Expand Fullscreen (⛶)" aria-label="Fullscreen">
+                        <svg class="fs-expand-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                        <svg class="fs-compress-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"/></svg>
+                      </button>
+                      <button type="button" class="code-copy-btn" title="Copy Diagram Source" aria-label="Copy Diagram Source">
+                        <svg class="copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span class="copy-text">Copy</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="mermaid-viewport" data-raw-code="${safeRaw}">
+                    <div class="mermaid-diagram" data-raw-code="${safeRaw}">${safeRaw}</div>
+                  </div>
+                </div>
+              `);
+            } else {
+              const langDisplay = block.lang || 'code';
+              const langClass = block.lang ? ` class="hljs language-${escapeHtml(block.lang)}"` : ' class="hljs"';
+              out.push(`
+                <div class="code-block-wrapper">
+                  <div class="code-block-header">
+                    <span class="code-lang-tag">${escapeHtml(langDisplay)}</span>
+                    <button type="button" class="code-copy-btn" title="Copy Code" aria-label="Copy Code">
+                      <svg class="copy-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      <svg class="check-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      <span class="copy-text">Copy</span>
+                    </button>
+                  </div>
+                  <pre><code${langClass}>${block.escapedCode}</code></pre>
+                </div>
+              `);
+            }
           }
           i++;
           continue;
@@ -1144,6 +1264,444 @@
     return html;
   }
 
+  // Initialize Markdown libraries
+  function initMarkdownLibraries() {
+    if (window.mermaid) {
+      try {
+        window.mermaid.initialize({
+          startOnLoad: false,
+          theme: 'dark',
+          securityLevel: 'loose',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+          themeVariables: {
+            darkMode: true,
+            background: '#0b0e14',
+            primaryColor: '#1f6feb',
+            primaryTextColor: '#c9d1d9',
+            primaryBorderColor: '#30363d',
+            lineColor: '#8b949e',
+            secondaryColor: '#161b22',
+            tertiaryColor: '#21262d',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+          }
+        });
+      } catch (e) {
+        console.warn('Failed to initialize mermaid:', e);
+      }
+    }
+  }
+
+  // Post-render enhancements (Highlight.js, Mermaid.js)
+  async function applyPostMarkdownEnhancements(container) {
+    if (!container) return;
+
+    // 1. Syntax highlighting with Highlight.js
+    if (window.hljs) {
+      container.querySelectorAll('.code-block-wrapper pre code').forEach((block) => {
+        const wrapper = block.closest('.code-block-wrapper');
+        const langTag = wrapper ? wrapper.querySelector('.code-lang-tag') : null;
+        const classes = Array.from(block.classList);
+        const hasSpecificLang = classes.some(c => c.startsWith('language-'));
+
+        if (hasSpecificLang) {
+          try {
+            window.hljs.highlightElement(block);
+          } catch (e) {
+            console.debug('Highlight error:', e);
+          }
+        } else {
+          // Auto-detect language
+          const codeText = block.textContent;
+          if (codeText && codeText.trim().length > 0) {
+            try {
+              const res = window.hljs.highlightAuto(codeText);
+              if (res && res.value) {
+                block.innerHTML = res.value;
+                block.classList.add('hljs');
+                if (res.language && langTag && (langTag.textContent === 'code' || !langTag.textContent)) {
+                  langTag.textContent = res.language;
+                }
+              }
+            } catch (e) {
+              try { window.hljs.highlightElement(block); } catch (e2) {}
+            }
+          }
+        }
+      });
+    }
+
+    // 2. Mermaid diagram rendering
+    if (window.mermaid) {
+      const diagrams = container.querySelectorAll('.mermaid-diagram:not([data-processed="true"])');
+      for (let idx = 0; idx < diagrams.length; idx++) {
+        const diag = diagrams[idx];
+        const rawCode = diag.getAttribute('data-raw-code') || diag.textContent;
+        const uniqueId = `mermaid-svg-${Date.now()}-${idx}-${Math.floor(Math.random() * 10000)}`;
+
+        try {
+          const { svg } = await window.mermaid.render(uniqueId, rawCode.trim());
+          diag.innerHTML = svg;
+          diag.setAttribute('data-processed', 'true');
+          const wrapper = diag.closest('.mermaid-block-wrapper');
+          if (wrapper) {
+            setupMermaidPanZoom(wrapper);
+          }
+        } catch (err) {
+          console.warn('Mermaid rendering failed for snippet:', err);
+          diag.setAttribute('data-processed', 'error');
+          diag.innerHTML = `
+            <div class="mermaid-error">
+              <div class="mermaid-error-title">⚠️ Diagram Render Error</div>
+              <pre class="mermaid-error-raw"><code>${escapeHtml(rawCode.trim())}</code></pre>
+            </div>
+          `;
+          const orphaned = document.getElementById(uniqueId) || document.getElementById(`d${uniqueId}`);
+          if (orphaned) orphaned.remove();
+        }
+      }
+    }
+  }
+
+  // Interactive Native SVG Pan & Zoom Controller for Mermaid diagrams
+  function setupMermaidPanZoom(wrapper) {
+    if (!wrapper || wrapper.dataset.panzoomInitialized) return;
+    wrapper.dataset.panzoomInitialized = 'true';
+
+    const viewport = wrapper.querySelector('.mermaid-viewport');
+    const diag = wrapper.querySelector('.mermaid-diagram');
+    const zoomBadge = wrapper.querySelector('.zoom-level-badge');
+    const zoomInBtn = wrapper.querySelector('.zoom-in-btn');
+    const zoomOutBtn = wrapper.querySelector('.zoom-out-btn');
+    const resetBtn = wrapper.querySelector('.zoom-reset-btn');
+    const fullscreenBtn = wrapper.querySelector('.fullscreen-btn');
+
+    if (!viewport || !diag) return;
+
+    const svg = diag.querySelector('svg');
+    if (!svg) return;
+
+    // 1. Read initial viewBox to obtain true vector boundaries
+    let minX = 0;
+    let minY = 0;
+    let origW = 800;
+    let origH = 400;
+
+    const vb = svg.getAttribute('viewBox');
+    if (vb) {
+      const parts = vb.trim().split(/[\s,]+/).map(parseFloat);
+      if (parts.length >= 4 && parts[2] > 0 && parts[3] > 0) {
+        minX = parts[0] || 0;
+        minY = parts[1] || 0;
+        origW = parts[2];
+        origH = parts[3];
+      }
+    } else {
+      try {
+        const bbox = svg.getBBox();
+        if (bbox && bbox.width > 0 && bbox.height > 0) {
+          minX = bbox.x || 0;
+          minY = bbox.y || 0;
+          origW = bbox.width;
+          origH = bbox.height;
+        }
+      } catch (_) {}
+    }
+
+    // 2. Prepare SVG for native vector viewport (remove max-width and fixed viewBox)
+    svg.removeAttribute('viewBox');
+    svg.removeAttribute('width');
+    svg.removeAttribute('height');
+    svg.style.maxWidth = 'none';
+    svg.style.maxHeight = 'none';
+    svg.style.width = '100%';
+    svg.style.height = '100%';
+    svg.style.display = 'block';
+    svg.style.overflow = 'hidden';
+
+    // 3. Wrap diagram elements into a dedicated SVG vector panzoom layer
+    let panzoomLayer = svg.querySelector(':scope > g.mermaid-panzoom-layer');
+    if (!panzoomLayer) {
+      panzoomLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      panzoomLayer.setAttribute('class', 'mermaid-panzoom-layer');
+
+      const children = Array.from(svg.childNodes);
+      children.forEach((child) => {
+        const tag = child.tagName ? child.tagName.toLowerCase() : '';
+        // Keep styles and defs at the root of the SVG
+        if (tag === 'style' || tag === 'defs' || tag === 'metadata') {
+          return;
+        }
+        panzoomLayer.appendChild(child);
+      });
+      svg.appendChild(panzoomLayer);
+    }
+
+    let scale = 1;
+    let tx = 0;
+    let ty = 0;
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    const MIN_SCALE = 0.2;
+    const MAX_SCALE = 6.0;
+
+    function applyTransform(smooth = false) {
+      panzoomLayer.classList.toggle('smooth-transition', smooth);
+      panzoomLayer.setAttribute('transform', `matrix(${scale}, 0, 0, ${scale}, ${tx}, ${ty})`);
+      if (zoomBadge) {
+        zoomBadge.textContent = `${Math.round(scale * 100)}%`;
+      }
+    }
+
+    function clampPan() {
+      const vRect = viewport.getBoundingClientRect();
+      if (vRect.width <= 0 || vRect.height <= 0) return;
+      const margin = 50;
+      const diagramW = origW * scale;
+      const diagramH = origH * scale;
+
+      const minTx = margin - (minX * scale + diagramW);
+      const maxTx = vRect.width - margin - (minX * scale);
+      const minTy = margin - (minY * scale + diagramH);
+      const maxTy = vRect.height - margin - (minY * scale);
+
+      if (minTx <= maxTx) {
+        tx = Math.min(Math.max(tx, minTx), maxTx);
+      }
+      if (minTy <= maxTy) {
+        ty = Math.min(Math.max(ty, minTy), maxTy);
+      }
+    }
+
+    function fitDiagram(smooth = false) {
+      const vRect = viewport.getBoundingClientRect();
+      if (vRect.width <= 0 || vRect.height <= 0) return;
+
+      const availW = Math.max(vRect.width - 60, 100);
+      const availH = Math.max(vRect.height - 60, 100);
+
+      const ratioW = availW / origW;
+      const ratioH = availH / origH;
+      const fitScale = Math.min(ratioW, ratioH, 1.0);
+
+      scale = Math.min(Math.max(fitScale, MIN_SCALE), 1.0);
+      tx = (vRect.width - origW * scale) / 2 - minX * scale;
+      ty = (vRect.height - origH * scale) / 2 - minY * scale;
+
+      clampPan();
+      applyTransform(smooth);
+    }
+
+    // Zoom centered strictly on a focal point (focalX, focalY) relative to viewport
+    function zoomTowards(newTargetScale, focalX, focalY, smooth = false) {
+      const clampedScale = Math.min(Math.max(newTargetScale, MIN_SCALE), MAX_SCALE);
+      if (clampedScale === scale) return;
+
+      // Mathematical focal point preservation:
+      // The point under (focalX, focalY) remains stationary
+      tx = focalX - (focalX - tx) * (clampedScale / scale);
+      ty = focalY - (focalY - ty) * (clampedScale / scale);
+      scale = clampedScale;
+
+      clampPan();
+      applyTransform(smooth);
+    }
+
+    // Mouse wheel zoom centered exactly on cursor position with smooth exponential curve
+    viewport.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const vRect = viewport.getBoundingClientRect();
+      const cursorX = e.clientX - vRect.left;
+      const cursorY = e.clientY - vRect.top;
+
+      const deltaMultiplier = e.deltaMode === 1 ? 24 : (e.deltaMode === 2 ? 400 : 1);
+      const delta = -e.deltaY * deltaMultiplier;
+      const zoomFactor = Math.min(Math.max(Math.exp(delta * 0.0015), 0.75), 1.35);
+
+      zoomTowards(scale * zoomFactor, cursorX, cursorY, false);
+    }, { passive: false });
+
+    // Pointer-based Panning (Mouse & Single Touch via Pointer Events)
+    viewport.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      isDragging = true;
+      startX = e.clientX - tx;
+      startY = e.clientY - ty;
+      viewport.classList.add('is-dragging');
+      panzoomLayer.classList.remove('smooth-transition');
+      try { viewport.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+
+    viewport.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      tx = e.clientX - startX;
+      ty = e.clientY - startY;
+      clampPan();
+      applyTransform(false);
+    });
+
+    const stopDragging = (e) => {
+      if (isDragging) {
+        isDragging = false;
+        viewport.classList.remove('is-dragging');
+        try { viewport.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+    };
+
+    viewport.addEventListener('pointerup', stopDragging);
+    viewport.addEventListener('pointercancel', stopDragging);
+
+    // Double-click to reset view
+    viewport.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      fitDiagram(true);
+    });
+
+    // Toolbar Buttons
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const vRect = viewport.getBoundingClientRect();
+        zoomTowards(scale * 1.25, vRect.width / 2, vRect.height / 2, true);
+      });
+    }
+
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const vRect = viewport.getBoundingClientRect();
+        zoomTowards(scale * 0.8, vRect.width / 2, vRect.height / 2, true);
+      });
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fitDiagram(true);
+      });
+    }
+
+    // Fullscreen toggle
+    function toggleFullscreen() {
+      const isFs = wrapper.classList.toggle('mermaid-fullscreen');
+      fullscreenBtn.title = isFs ? 'Exit Fullscreen (Esc)' : 'Expand Fullscreen (⛶)';
+      setTimeout(() => {
+        fitDiagram(false);
+      }, 60);
+    }
+
+    if (fullscreenBtn) {
+      fullscreenBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFullscreen();
+      });
+    }
+
+    // Two-finger pinch-to-zoom on touch devices
+    let initialPinchDist = 0;
+    let initialPinchScale = 1;
+
+    viewport.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        isDragging = false;
+        initialPinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        initialPinchScale = scale;
+      }
+    }, { passive: true });
+
+    viewport.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && initialPinchDist > 0) {
+        const currentDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const vRect = viewport.getBoundingClientRect();
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - vRect.left;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - vRect.top;
+        const factor = currentDist / initialPinchDist;
+        zoomTowards(initialPinchScale * factor, midX, midY, false);
+      }
+    }, { passive: true });
+
+    viewport.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2) {
+        initialPinchDist = 0;
+      }
+    });
+
+    // Esc key exits fullscreen
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && wrapper.classList.contains('mermaid-fullscreen')) {
+        wrapper.classList.remove('mermaid-fullscreen');
+        if (fullscreenBtn) fullscreenBtn.title = 'Expand Fullscreen (⛶)';
+        setTimeout(() => fitDiagram(false), 60);
+      }
+    });
+
+    // Dynamic resize handling
+    let hasFitted = false;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const cr = entry.contentRect;
+        if (cr.width > 0 && cr.height > 0) {
+          if (!hasFitted) {
+            hasFitted = true;
+            fitDiagram(false);
+          }
+        }
+      }
+    });
+    ro.observe(viewport);
+
+    // Initial fit
+    requestAnimationFrame(() => {
+      fitDiagram(false);
+    });
+  }
+
+  function copyTextFallback(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+    } catch (e) {
+      showToast('Could not copy to clipboard');
+    }
+    document.body.removeChild(ta);
+  }
+
+  function triggerCopyFeedback(btn) {
+    const textSpan = btn.querySelector('.copy-text');
+    const origText = textSpan ? textSpan.textContent : 'Copy';
+    btn.classList.add('copied');
+    if (textSpan) textSpan.textContent = 'Copied!';
+
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      if (textSpan) textSpan.textContent = origText;
+    }, 2000);
+  }
+
+  function resetModalTabs() {
+    if (modalTabWrite && modalTabPreview && formFlesh && modalFleshPreview) {
+      modalTabPreview.classList.remove('active');
+      modalTabWrite.classList.add('active');
+      modalFleshPreview.style.display = 'none';
+      formFlesh.style.display = 'block';
+      modalFleshPreview.innerHTML = '';
+    }
+  }
+
   // API Mutations
   async function toggleCurrentItemStatus() {
     const item = filteredItems[selectedIndex];
@@ -1191,6 +1749,7 @@
   // Modal Handlers
   function openNoteModal(editItem = null) {
     noteModal.style.display = 'flex';
+    resetModalTabs();
     if (editItem) {
       const flesh = (currentNoteDetail && (currentNoteDetail.id === editItem.id || currentNoteDetail.id.startsWith(editItem.id))) ? 
         (currentNoteDetail.note_flesh || editItem.flesh || '') : (editItem.flesh || '');
@@ -1216,6 +1775,7 @@
   function closeNoteModal() {
     noteModal.style.display = 'none';
     noteForm.reset();
+    resetModalTabs();
   }
 
   async function handleNoteFormSubmit(e) {
