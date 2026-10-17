@@ -54,6 +54,12 @@
   const modalCancelBtn = document.getElementById('modal-cancel-btn');
   const modalTitle = document.getElementById('modal-title');
   const toast = document.getElementById('toast');
+  let toastTimer = null;
+
+  // PWA Elements & State
+  const pwaInstallBtn = document.getElementById('pwa-install-btn');
+  const offlineBadge = document.getElementById('offline-badge');
+  let deferredInstallPrompt = null;
 
   // Auth Elements & State
   const logoutBtn = document.getElementById('logout-btn');
@@ -129,13 +135,101 @@
 
   // Initialize
   async function init() {
+    initPWA();
     setupEventListeners();
     const canLoad = await checkAuthStatus();
     if (canLoad) {
       await loadData();
       await loadTags();
       await loadStats();
+      handlePWAUrlAction();
     }
+  }
+
+  function initPWA() {
+    // 1. Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          .then(registration => {
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    showToast('Update available! Reload to update.', 'Reload', () => {
+                      newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    });
+                  }
+                });
+              }
+            });
+          })
+          .catch(err => {
+            console.warn('Service worker registration failed:', err);
+          });
+
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
+      });
+    }
+
+    // 2. Install Prompt Handling
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      if (pwaInstallBtn) {
+        pwaInstallBtn.style.display = 'inline-flex';
+      }
+    });
+
+    window.addEventListener('appinstalled', () => {
+      if (pwaInstallBtn) {
+        pwaInstallBtn.style.display = 'none';
+      }
+      deferredInstallPrompt = null;
+      showToast('KB App installed successfully! 🎉');
+    });
+
+    // 3. Online/Offline Network Monitoring
+    const updateOnlineStatus = () => {
+      const isOnline = navigator.onLine;
+      if (offlineBadge) {
+        offlineBadge.style.display = isOnline ? 'none' : 'inline-flex';
+      }
+    };
+
+    window.addEventListener('online', () => {
+      updateOnlineStatus();
+      showToast('Connected — syncing latest data');
+      loadData();
+      loadTags();
+      loadStats();
+    });
+
+    window.addEventListener('offline', () => {
+      updateOnlineStatus();
+      showToast('Working offline — cached notes available');
+    });
+
+    updateOnlineStatus();
+  }
+
+  function handlePWAUrlAction() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const action = params.get('action');
+      if (action === 'new') {
+        setTimeout(() => openNoteModal(), 200);
+      } else if (action === 'search') {
+        if (searchInput) searchInput.focus();
+      }
+    } catch (_) {}
   }
 
   // Event Listeners
@@ -196,6 +290,19 @@
     document.addEventListener('keydown', handleGlobalKeydown);
 
     // Header Actions
+    if (pwaInstallBtn) {
+      pwaInstallBtn.addEventListener('click', async () => {
+        if (!deferredInstallPrompt) return;
+        deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice;
+        if (choice.outcome === 'accepted') {
+          showToast('Installing KB App...');
+        }
+        deferredInstallPrompt = null;
+        pwaInstallBtn.style.display = 'none';
+      });
+    }
+
     newNoteBtn.addEventListener('click', () => openNoteModal());
     if (syncBtn) {
       syncBtn.addEventListener('click', async () => {
@@ -1160,12 +1267,33 @@
     }
   }
 
-  function showToast(message) {
-    toast.textContent = message;
-    toast.style.display = 'block';
-    setTimeout(() => {
-      toast.style.display = 'none';
-    }, 2500);
+  function showToast(message, actionText, actionCallback) {
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+    toast.innerHTML = '';
+    const span = document.createElement('span');
+    span.textContent = message;
+    toast.appendChild(span);
+
+    if (actionText && actionCallback) {
+      const btn = document.createElement('button');
+      btn.className = 'toast-action-btn';
+      btn.textContent = actionText;
+      btn.addEventListener('click', () => {
+        toast.style.display = 'none';
+        actionCallback();
+      });
+      toast.appendChild(btn);
+    }
+
+    toast.style.display = 'flex';
+    if (!actionText) {
+      toastTimer = setTimeout(() => {
+        toast.style.display = 'none';
+      }, 3000);
+    }
   }
 
   function escapeHtml(str) {

@@ -206,6 +206,37 @@ html, body {
   pointer-events: none;
 }
 
+.btn-install-pwa {
+  background: rgba(88, 166, 255, 0.12);
+  color: var(--accent-blue);
+  border-color: rgba(88, 166, 255, 0.3);
+  gap: 4px;
+}
+
+.btn-install-pwa:hover {
+  background: rgba(88, 166, 255, 0.22);
+  border-color: var(--accent-blue);
+}
+
+.badge-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(240, 136, 62, 0.15);
+  color: var(--accent-orange);
+  border: 1px solid rgba(240, 136, 62, 0.3);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  animation: pulseOffline 2s infinite ease-in-out;
+}
+
+@keyframes pulseOffline {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 .btn-text {
   background: transparent;
   border: none;
@@ -1008,11 +1039,31 @@ html, body {
   background: #1f242c;
   color: var(--text-main);
   border: 1px solid var(--border-color);
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
   font-size: 12px;
   z-index: 200;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast-action-btn {
+  background: var(--accent-blue);
+  color: #0d1117;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.toast-action-btn:hover {
+  opacity: 0.85;
 }
 
 /* ==========================================================================

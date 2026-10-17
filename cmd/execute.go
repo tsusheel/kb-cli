@@ -19,9 +19,19 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+var Version = "0.1.5"
+
+func SetVersion(v string) {
+	if v != "" {
+		Version = v
+		rootCmd.Version = v
+	}
+}
+
 var configFileFlag string
 
 func init() {
+	rootCmd.Version = Version
 	rootCmd.PersistentFlags().StringVarP(&configFileFlag, "config", "c", "", "Path to custom config.yaml profile")
 }
 

@@ -392,6 +392,28 @@ kb --config ~/.config/kb-work/config.yaml ls
 KB_CONFIG=~/.config/kb-work/config.yaml kb stats
 ```
 
+### 11. Interactive Web Fuzzy Finder & Progressive Web App (`kb serve http`)
+
+Launch the embedded dual-pane web fuzzy finder and live preview interface with offline Progressive Web App (PWA) support:
+
+```bash
+# Start on default port 8080
+kb serve http
+
+# Open in your default browser automatically
+kb serve http -o
+
+# Custom port and binding
+kb serve http --port 3000 --host 0.0.0.0
+
+# Enable HTTPS for remote/mobile PWA installation over local network
+kb serve http --tls-cert cert.pem --tls-key key.pem
+```
+
+- **Installable PWA**: Install directly from the browser as a standalone desktop or mobile app (Chrome, Edge, Safari, Firefox).
+- **Offline Mode**: Precaches the app shell and caches read-only queries (`/api/items`, `/api/tags`, `/api/stats`) so you can search and browse notes even when disconnected.
+- **Keyboard Shortcuts**: Built-in fast navigation (`/` search, `↑`/`↓` navigate, `N` new note, `V` toggle raw markdown, `E` edit, `Esc` clear).
+
 ---
 
 ## Connecting AI Agents (MCP Server)

@@ -57,7 +57,10 @@ func resolveConfigPaths() (string, string) {
 	return configDir, filepath.Join(configDir, "config.yaml")
 }
 
+var version = "0.1.5"
+
 func main() {
+	cmd.SetVersion(version)
 	configDir, configFile := resolveConfigPaths()
 
 	viper.SetConfigFile(configFile)

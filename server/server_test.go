@@ -71,6 +71,45 @@ func TestServerStaticRoutes(t *testing.T) {
 	if recJS.Code != http.StatusOK {
 		t.Errorf("expected 200 for /app.js, got %d", recJS.Code)
 	}
+
+	// 4. Test PWA manifest.json
+	reqManifest := httptest.NewRequest(http.MethodGet, "/manifest.json", nil)
+	recManifest := httptest.NewRecorder()
+	handler.ServeHTTP(recManifest, reqManifest)
+
+	if recManifest.Code != http.StatusOK {
+		t.Errorf("expected 200 for /manifest.json, got %d", recManifest.Code)
+	}
+	if !strings.Contains(recManifest.Header().Get("Content-Type"), "application/manifest+json") {
+		t.Errorf("expected application/manifest+json, got %s", recManifest.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(recManifest.Body.String(), "Knowledge Base") {
+		t.Errorf("manifest.json missing expected name")
+	}
+
+	// 5. Test PWA sw.js
+	reqSW := httptest.NewRequest(http.MethodGet, "/sw.js", nil)
+	recSW := httptest.NewRecorder()
+	handler.ServeHTTP(recSW, reqSW)
+
+	if recSW.Code != http.StatusOK {
+		t.Errorf("expected 200 for /sw.js, got %d", recSW.Code)
+	}
+	if recSW.Header().Get("Service-Worker-Allowed") != "/" {
+		t.Errorf("expected Service-Worker-Allowed: /, got %s", recSW.Header().Get("Service-Worker-Allowed"))
+	}
+	if !strings.Contains(recSW.Body.String(), "CACHE_VERSION") {
+		t.Errorf("sw.js missing expected CACHE_VERSION")
+	}
+
+	// 6. Test PWA icon.svg
+	reqIcon := httptest.NewRequest(http.MethodGet, "/icon.svg", nil)
+	recIcon := httptest.NewRecorder()
+	handler.ServeHTTP(recIcon, reqIcon)
+
+	if recIcon.Code != http.StatusOK {
+		t.Errorf("expected 200 for /icon.svg, got %d", recIcon.Code)
+	}
 }
 
 func TestServerAPIRoutes(t *testing.T) {

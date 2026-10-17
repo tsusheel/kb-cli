@@ -55,9 +55,22 @@ func RegisterRoutes() http.Handler {
 		if path == "" {
 			path = "index.html"
 		}
+		if path == "manifest.webmanifest" || path == "site.webmanifest" {
+			r.URL.Path = "/assets/site.webmanifest"
+			path = "assets/site.webmanifest"
+		} else if path == "favicon.ico" {
+			r.URL.Path = "/assets/favicon.ico"
+			path = "assets/favicon.ico"
+		}
 		if _, err := fs.Stat(webFS, path); err != nil {
 			// Fallback to index.html for SPA routing
 			r.URL.Path = "/"
+		}
+		if strings.HasSuffix(path, "manifest.json") || strings.HasSuffix(path, ".webmanifest") {
+			w.Header().Set("Content-Type", "application/manifest+json")
+		} else if path == "sw.js" {
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+			w.Header().Set("Service-Worker-Allowed", "/")
 		}
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Pragma", "no-cache")

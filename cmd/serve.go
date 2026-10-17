@@ -8,9 +8,11 @@ import (
 )
 
 var (
-	serveHTTPPort int
-	serveHTTPHost string
-	serveHTTPOpen bool
+	serveHTTPPort    int
+	serveHTTPHost    string
+	serveHTTPOpen    bool
+	serveHTTPTLSCert string
+	serveHTTPTLSKey  string
 )
 
 var serveCmd = &cobra.Command{
@@ -42,14 +44,16 @@ var serveMCPCmd = &cobra.Command{
 var serveHTTPCmd = &cobra.Command{
 	Use:     "http",
 	Aliases: []string{"web", "ui"},
-	Short:   "Start a modern web-based fuzzy finder with live preview pane",
+	Short:   "Start a modern web-based fuzzy finder with live preview pane (PWA enabled)",
 	Long: `Start a lightweight embedded web server hosting an interactive fuzzy finder
-with a dual-pane live markdown preview, real-time filtering, and keyboard navigation.
+with a dual-pane live markdown preview, real-time filtering, keyboard navigation,
+and Progressive Web App (PWA) offline installation.
 
 Examples:
   kb serve http
   kb serve http --port 3000 --open
-  kb serve web -p 8080 -o`,
+  kb serve web -p 8080 -o
+  kb serve http --tls-cert cert.pem --tls-key key.pem`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port := serveHTTPPort
 		if !cmd.Flags().Changed("port") && viper.IsSet("server.port") {
@@ -59,10 +63,21 @@ Examples:
 		if !cmd.Flags().Changed("host") && viper.IsSet("server.host") {
 			host = viper.GetString("server.host")
 		}
+		tlsCert := serveHTTPTLSCert
+		if tlsCert == "" && viper.IsSet("server.tls_cert") {
+			tlsCert = viper.GetString("server.tls_cert")
+		}
+		tlsKey := serveHTTPTLSKey
+		if tlsKey == "" && viper.IsSet("server.tls_key") {
+			tlsKey = viper.GetString("server.tls_key")
+		}
+
 		cfg := server.Config{
 			Host:        host,
 			Port:        port,
 			OpenBrowser: serveHTTPOpen,
+			TLSCertFile: tlsCert,
+			TLSKeyFile:  tlsKey,
 		}
 		return server.Start(cfg)
 	},
@@ -72,6 +87,8 @@ func init() {
 	serveHTTPCmd.Flags().IntVarP(&serveHTTPPort, "port", "p", 8080, "Port to listen on")
 	serveHTTPCmd.Flags().StringVar(&serveHTTPHost, "host", "127.0.0.1", "Host address to bind to")
 	serveHTTPCmd.Flags().BoolVarP(&serveHTTPOpen, "open", "o", false, "Automatically open web finder in default browser")
+	serveHTTPCmd.Flags().StringVar(&serveHTTPTLSCert, "tls-cert", "", "Path to TLS certificate file (enables HTTPS for remote PWA install)")
+	serveHTTPCmd.Flags().StringVar(&serveHTTPTLSKey, "tls-key", "", "Path to TLS private key file")
 
 	serveCmd.AddCommand(serveMCPCmd)
 	serveCmd.AddCommand(serveHTTPCmd)

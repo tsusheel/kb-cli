@@ -4,6 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KB</title>
+  <meta name="theme-color" content="#0d1117">
+  <meta name="color-scheme" content="dark">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="KB">
+  <link rel="icon" type="image/png" href="/assets/favicon-96x96.png" sizes="96x96">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="shortcut icon" href="/assets/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="manifest" href="/assets/site.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -29,6 +40,8 @@
       </div>
 
       <div class="header-actions">
+        <span id="offline-badge" class="badge-offline" style="display: none;" title="Working Offline">⚡ Offline</span>
+        <button id="pwa-install-btn" class="btn btn-secondary btn-install-pwa" title="Install KB as Native App" style="display: none;">⬇ Install</button>
         <button id="new-note-btn" class="btn btn-primary" title="New Note (N)">+ New</button>
         <button id="sync-btn" class="btn btn-secondary" title="Sync Database">Sync</button>
         <button id="logout-btn" class="btn btn-secondary btn-icon-only" title="Sign Out / Lock" style="display: none;">🔒</button>

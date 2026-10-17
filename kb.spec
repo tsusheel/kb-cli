@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           kb
-Version:        0.1.4
+Version:        0.1.5
 Release:        1%{?dist}
 Summary:        Knowledge Base CLI
 
@@ -37,6 +37,11 @@ fi
 %{_bindir}/kb
 
 %changelog
+* Sat Oct 17 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.5-1
+- Add Progressive Web App (PWA) support with offline caching and service worker
+- Add terminal-themed PWA icons, favicons, and webmanifest assets
+- Organize static web assets and optimize cache headers
+
 * Sat Oct 10 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.4-1
 - Release v0.1.4 with Cloudflare R2 APT repository and Fedora Copr package updates
 

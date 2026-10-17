@@ -18,6 +18,8 @@ type Config struct {
 	Host        string
 	Port        int
 	OpenBrowser bool
+	TLSCertFile string
+	TLSKeyFile  string
 }
 
 // Start boots the embedded HTTP web fuzzy finder server and blocks until SIGINT/SIGTERM.
@@ -26,7 +28,11 @@ func Start(cfg Config) error {
 		cfg.Host = "127.0.0.1"
 	}
 	if cfg.Port <= 0 {
-		cfg.Port = 8080
+		if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
+			cfg.Port = 8443
+		} else {
+			cfg.Port = 8080
+		}
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
@@ -47,15 +53,22 @@ func Start(cfg Config) error {
 	if host == "0.0.0.0" {
 		host = "127.0.0.1"
 	}
-	url := fmt.Sprintf("http://%s:%d", host, cfg.Port)
-	if cfg.Port == 80 {
-		url = fmt.Sprintf("http://%s/", host)
+
+	isTLS := cfg.TLSCertFile != "" && cfg.TLSKeyFile != ""
+	scheme := "http"
+	if isTLS {
+		scheme = "https"
+	}
+
+	url := fmt.Sprintf("%s://%s:%d", scheme, host, cfg.Port)
+	if (scheme == "http" && cfg.Port == 80) || (scheme == "https" && cfg.Port == 443) {
+		url = fmt.Sprintf("%s://%s/", scheme, host)
 	}
 
 	fmt.Println()
 	fmt.Println("  ╭─────────────────────────────────────────────────────────────╮")
 	fmt.Println("  │                                                             │")
-	fmt.Println("  │   📦 KB Web Fuzzy Finder & Live Preview                     │")
+	fmt.Println("  │   📦 KB Web Fuzzy Finder & Live Preview (PWA Ready)         │")
 	fmt.Printf("  │   🌐 Running at: %-42s │\n", url)
 	fmt.Println("  │   ⚡ Press Ctrl+C to stop the server                        │")
 	fmt.Println("  │                                                             │")
@@ -72,7 +85,13 @@ func Start(cfg Config) error {
 	// Server error channel
 	serverErr := make(chan error, 1)
 	go func() {
-		if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
+		var err error
+		if isTLS {
+			err = httpServer.ServeTLS(listener, cfg.TLSCertFile, cfg.TLSKeyFile)
+		} else {
+			err = httpServer.Serve(listener)
+		}
+		if err != nil && err != http.ErrServerClosed {
 			serverErr <- err
 		}
 	}()
