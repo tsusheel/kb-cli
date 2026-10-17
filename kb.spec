@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           kb
-Version:        0.1.5
+Version:        0.1.6
 Release:        1%{?dist}
 Summary:        Knowledge Base CLI
 
@@ -37,6 +37,12 @@ fi
 %{_bindir}/kb
 
 %changelog
+* Sat Oct 17 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.6-1
+- Add code syntax highlighting via Highlight.js and interactive Mermaid diagram support
+- Add SVG vector pan and zoom with cursor focal point tracking for Mermaid diagrams
+- Update lock screen prompt with KB terminal app icon and refine UI shadows
+- Remove standalone PWA install button for cleaner header layout
+
 * Sat Oct 17 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.5-1
 - Add Progressive Web App (PWA) support with offline caching and service worker
 - Add terminal-themed PWA icons, favicons, and webmanifest assets
