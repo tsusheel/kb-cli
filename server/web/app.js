@@ -61,9 +61,7 @@
   let toastTimer = null;
 
   // PWA Elements & State
-  const pwaInstallBtn = document.getElementById('pwa-install-btn');
   const offlineBadge = document.getElementById('offline-badge');
-  let deferredInstallPrompt = null;
 
   // Auth Elements & State
   const logoutBtn = document.getElementById('logout-btn');
@@ -184,20 +182,8 @@
       });
     }
 
-    // 2. Install Prompt Handling
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredInstallPrompt = e;
-      if (pwaInstallBtn) {
-        pwaInstallBtn.style.display = 'inline-flex';
-      }
-    });
-
+    // 2. Install Status
     window.addEventListener('appinstalled', () => {
-      if (pwaInstallBtn) {
-        pwaInstallBtn.style.display = 'none';
-      }
-      deferredInstallPrompt = null;
       showToast('KB App installed successfully! 🎉');
     });
 
@@ -295,19 +281,6 @@
     document.addEventListener('keydown', handleGlobalKeydown);
 
     // Header Actions
-    if (pwaInstallBtn) {
-      pwaInstallBtn.addEventListener('click', async () => {
-        if (!deferredInstallPrompt) return;
-        deferredInstallPrompt.prompt();
-        const choice = await deferredInstallPrompt.userChoice;
-        if (choice.outcome === 'accepted') {
-          showToast('Installing KB App...');
-        }
-        deferredInstallPrompt = null;
-        pwaInstallBtn.style.display = 'none';
-      });
-    }
-
     newNoteBtn.addEventListener('click', () => openNoteModal());
     if (syncBtn) {
       syncBtn.addEventListener('click', async () => {
