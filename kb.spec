@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           kb
-Version:        0.1.6
+Version:        0.1.7
 Release:        1%{?dist}
 Summary:        Knowledge Base CLI
 
@@ -37,6 +37,12 @@ fi
 %{_bindir}/kb
 
 %changelog
+* Sun Oct 18 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.7-1
+- Modularize client JavaScript into clean single-responsibility ES modules
+- Add esbuild bundling and minification pipeline for web assets
+- Prevent iOS Safari auto-zoom on input focus by enforcing 16px font-size
+- Optimize virtual keyboard resizing with interactive-widget=resizes-content
+
 * Sat Oct 17 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.6-1
 - Add code syntax highlighting via Highlight.js and interactive Mermaid diagram support
 - Add SVG vector pan and zoom with cursor focal point tracking for Mermaid diagrams
