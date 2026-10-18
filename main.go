@@ -57,7 +57,7 @@ func resolveConfigPaths() (string, string) {
 	return configDir, filepath.Join(configDir, "config.yaml")
 }
 
-var version = "0.1.10"
+var version = "0.1.11"
 
 func main() {
 	cmd.SetVersion(version)
