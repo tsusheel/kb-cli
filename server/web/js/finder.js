@@ -28,6 +28,7 @@ import { openNoteModal, closeNoteModal } from './modal.js';
 
 export function showMobileDetail() {
   if (window.innerWidth <= 768 && dom.appContainer) {
+    dom.appContainer.classList.remove('mobile-search-open');
     dom.appContainer.classList.add('mobile-show-preview');
   }
 }
@@ -35,6 +36,7 @@ export function showMobileDetail() {
 export function showMobileList() {
   if (dom.appContainer) {
     dom.appContainer.classList.remove('mobile-show-preview');
+    dom.appContainer.classList.remove('mobile-search-open');
   }
 }
 
@@ -483,6 +485,9 @@ export function handleGlobalKeydown(e) {
     if (isModalOpen) {
       closeNoteModal();
       e.preventDefault();
+    } else if (dom.appContainer && dom.appContainer.classList.contains('mobile-search-open')) {
+      dom.appContainer.classList.remove('mobile-search-open');
+      e.preventDefault();
     } else if (dom.appContainer && dom.appContainer.classList.contains('mobile-show-preview')) {
       showMobileList();
       e.preventDefault();
@@ -578,6 +583,75 @@ export function setupFinderListeners() {
   if (dom.mobileBackBtn) {
     dom.mobileBackBtn.addEventListener('click', () => {
       showMobileList();
+    });
+  }
+
+  // Mobile Bottom Search Handlers
+  function openMobileSearch() {
+    if (!dom.appContainer || !dom.mobileSearchInput) return;
+    dom.appContainer.classList.add('mobile-search-open');
+    const isDocs = state.currentViewMode === 'docs';
+    dom.mobileSearchInput.placeholder = isDocs ? 'Search documentation...' : 'Search notes & tasks...';
+    dom.mobileSearchInput.value = isDocs ? (dom.docsSearchInput?.value || '') : (dom.searchInput?.value || '');
+    if (dom.mobileSearchClear) {
+      dom.mobileSearchClear.style.display = dom.mobileSearchInput.value ? 'block' : 'none';
+    }
+    setTimeout(() => {
+      dom.mobileSearchInput.focus();
+    }, 60);
+  }
+
+  function closeMobileSearch() {
+    if (!dom.appContainer) return;
+    dom.appContainer.classList.remove('mobile-search-open');
+  }
+
+  if (dom.mobileSearchBtn) {
+    dom.mobileSearchBtn.addEventListener('click', openMobileSearch);
+  }
+
+  if (dom.mobileSearchClose) {
+    dom.mobileSearchClose.addEventListener('click', closeMobileSearch);
+  }
+
+  if (dom.mobileSearchClear) {
+    dom.mobileSearchClear.addEventListener('click', () => {
+      if (dom.mobileSearchInput) {
+        dom.mobileSearchInput.value = '';
+        dom.mobileSearchClear.style.display = 'none';
+        dom.mobileSearchInput.focus();
+      }
+      if (state.currentViewMode === 'docs') {
+        if (dom.docsSearchInput) {
+          dom.docsSearchInput.value = '';
+          dom.docsSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      } else {
+        if (dom.searchInput) {
+          dom.searchInput.value = '';
+          dom.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    });
+  }
+
+  if (dom.mobileSearchInput) {
+    dom.mobileSearchInput.addEventListener('input', () => {
+      const val = dom.mobileSearchInput.value;
+      if (dom.mobileSearchClear) {
+        dom.mobileSearchClear.style.display = val ? 'block' : 'none';
+      }
+      if (state.currentViewMode === 'docs') {
+        if (dom.docsSearchInput) {
+          dom.docsSearchInput.value = val;
+          dom.docsSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      } else {
+        if (dom.searchInput) {
+          dom.searchInput.value = val;
+          dom.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
     });
   }
 

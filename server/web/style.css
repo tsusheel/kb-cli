@@ -157,6 +157,7 @@ html, body {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* Buttons */
@@ -1492,6 +1493,11 @@ html, body {
   display: none;
 }
 
+.mobile-fab,
+.mobile-bottom-search {
+  display: none !important;
+}
+
 /* Tablets & Small Laptops (769px to 1024px) */
 @media (min-width: 769px) and (max-width: 1024px) {
   .results-pane {
@@ -1543,6 +1549,12 @@ html, body {
     padding: 10px 12px;
   }
 
+  /* Hide search bar in header and docs search in pane on mobile */
+  .search-container,
+  .docs-search-wrapper {
+    display: none !important;
+  }
+
   .app-header {
     padding: 0 12px;
     gap: 8px;
@@ -1581,18 +1593,13 @@ html, body {
   }
 
   /* When viewing preview on mobile */
-  .mobile-show-preview .results-pane {
-    display: none;
+  .mobile-show-preview .results-pane,
+  .mobile-show-preview .docs-pane {
+    display: none !important;
   }
 
   .mobile-show-preview .preview-pane {
-    display: flex;
-  }
-
-  .preview-nav-bar {
-    display: flex;
-    align-items: center;
-    margin-bottom: 12px;
+    display: flex !important;
   }
 
   .preview-content {
@@ -1658,10 +1665,147 @@ html, body {
   }
 
   .toast {
-    bottom: 20px;
+    bottom: 78px;
     left: 20px;
     right: 20px;
     text-align: center;
+  }
+
+  /* Mobile Floating Action Buttons (FAB) at Bottom-Right */
+  .mobile-fab {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    right: calc(20px + env(safe-area-inset-right, 0px));
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-full);
+    background: rgba(22, 27, 34, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: var(--text-main);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    z-index: 90;
+    transition: transform 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .mobile-fab:active {
+    transform: scale(0.92);
+    background: rgba(33, 38, 45, 0.98);
+  }
+
+  /* List view: Search FAB visible, Back FAB hidden */
+  .mobile-back-fab {
+    display: none !important;
+  }
+  .mobile-search-fab {
+    display: flex !important;
+  }
+
+  /* Preview view: Back FAB visible, Search FAB hidden */
+  .mobile-show-preview .mobile-back-fab {
+    display: flex !important;
+  }
+  .mobile-show-preview .mobile-search-fab {
+    display: none !important;
+  }
+
+  /* When bottom search dock is expanded: hide search FAB */
+  .mobile-search-open .mobile-search-fab {
+    display: none !important;
+  }
+
+  /* Mobile Bottom Search Dock */
+  .mobile-bottom-search {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(13, 17, 23, 0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border-color);
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+    z-index: 100;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  .mobile-search-open .mobile-bottom-search {
+    display: block !important;
+    animation: slideUpBottom 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .mobile-bottom-search-inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0 10px;
+    height: 42px;
+    transition: border-color 0.15s ease;
+  }
+
+  .mobile-bottom-search-inner:focus-within {
+    border-color: var(--border-focus);
+  }
+
+  .mobile-search-icon {
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  #mobile-search-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    font-size: 16px !important;
+    outline: none;
+    padding: 0;
+  }
+
+  #mobile-search-input::placeholder {
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  .btn-close-search {
+    background: transparent;
+    border: none;
+    color: var(--accent-blue);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .btn-close-search:hover {
+    opacity: 0.85;
+  }
+
+  @keyframes slideUpBottom {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
 
   /* Mobile Mermaid Diagram Clean Layout */
@@ -2022,6 +2166,9 @@ html, body {
     flex: 1 1 100%;
     width: 100%;
     border-right: none;
+  }
+  .docs-pane-header {
+    gap: 0;
   }
 }
 

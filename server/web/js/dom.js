@@ -14,6 +14,11 @@ export const dom = {
   // Results & Navigation
   resultsList: document.getElementById('results-list'),
   mobileBackBtn: document.getElementById('mobile-back-btn'),
+  mobileSearchBtn: document.getElementById('mobile-search-btn'),
+  mobileBottomSearch: document.getElementById('mobile-bottom-search'),
+  mobileSearchInput: document.getElementById('mobile-search-input'),
+  mobileSearchClear: document.getElementById('mobile-search-clear'),
+  mobileSearchClose: document.getElementById('mobile-search-close'),
 
   // Preview Pane
   previewEmpty: document.getElementById('preview-empty'),

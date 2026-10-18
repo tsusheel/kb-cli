@@ -96,6 +96,7 @@ export async function switchViewMode(mode, targetDocPath = null) {
 
   // Toggle Header action buttons
   if (dom.newNoteBtn) dom.newNoteBtn.style.display = isDocs ? 'none' : 'inline-flex';
+  if (dom.syncBtn) dom.syncBtn.style.display = isDocs ? 'none' : 'inline-flex';
   if (dom.searchInput) {
     dom.searchInput.parentElement.parentElement.style.display = isDocs ? 'none' : 'flex';
   }
@@ -121,7 +122,12 @@ export async function switchViewMode(mode, targetDocPath = null) {
 
     // Determine document to display
     const docToLoad = targetDocPath || state.selectedDocPath || 'README.md';
-    await selectDoc(docToLoad, false);
+    const isMobile = window.innerWidth <= 768;
+    const shouldOpenMobile = !isMobile || Boolean(targetDocPath);
+    await selectDoc(docToLoad, Boolean(targetDocPath), shouldOpenMobile);
+    if (!shouldOpenMobile) {
+      showMobileList();
+    }
   } else {
     // Revert URL to root if it was on a /docs path
     if (window.location.pathname.startsWith('/docs')) {
@@ -256,7 +262,7 @@ function bindTreeEvents() {
 /**
  * Loads and displays the selected documentation file in the preview pane.
  */
-export async function selectDoc(docPath, updateUrl = true) {
+export async function selectDoc(docPath, updateUrl = true, openMobilePreview = true) {
   state.selectedDocPath = docPath;
 
   // Update active item in tree
@@ -307,7 +313,9 @@ export async function selectDoc(docPath, updateUrl = true) {
     }
 
     updateViewModeDisplay();
-    showMobileDetail();
+    if (openMobilePreview) {
+      showMobileDetail();
+    }
   } catch (err) {
     console.error('Error fetching doc content:', err);
     if (dom.previewMarkdownBody) {

@@ -108,9 +108,6 @@
         <div id="preview-content" class="preview-content" style="display: none;">
           <!-- Preview Header -->
           <div class="preview-header">
-            <div class="preview-nav-bar mobile-only">
-              <button id="mobile-back-btn" class="btn btn-sm btn-secondary mobile-back-btn" title="Back to List">← Back to List</button>
-            </div>
             <!-- Documentation Breadcrumb (Visible in Docs Mode) -->
             <div id="docs-breadcrumb" class="docs-breadcrumb" style="display: none;">
               <span id="docs-breadcrumb-path"></span>
@@ -180,6 +177,40 @@
       </div>
       <div class="footer-stats" id="footer-stats"></div>
     </footer>
+
+    <!-- Mobile Floating Action Buttons (Fixed Bottom-Right) -->
+    <button id="mobile-back-btn" class="mobile-fab mobile-back-fab" title="Back to List" aria-label="Back to List">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+    </button>
+
+    <button id="mobile-search-btn" class="mobile-fab mobile-search-fab" title="Search" aria-label="Search">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+    </button>
+
+    <!-- Mobile Bottom Search Dock -->
+    <div id="mobile-bottom-search" class="mobile-bottom-search">
+      <div class="mobile-bottom-search-inner">
+        <svg class="mobile-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input 
+          type="text" 
+          id="mobile-search-input" 
+          placeholder="Search notes..." 
+          autocomplete="off" 
+          spellcheck="false"
+        >
+        <button id="mobile-search-clear" class="btn-clear" title="Clear" style="display: none;">✕</button>
+        <button id="mobile-search-close" class="btn-close-search" title="Close Search">Done</button>
+      </div>
+    </div>
 
     <!-- Note Modal -->
     <div id="note-modal" class="modal-backdrop" style="display: none;">
