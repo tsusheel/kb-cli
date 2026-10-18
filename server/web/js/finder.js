@@ -38,7 +38,9 @@ export function showMobileDetail() {
 export function showMobileList() {
   if (dom.appContainer) {
     dom.appContainer.classList.remove('mobile-show-preview');
-    dom.appContainer.classList.remove('mobile-search-open');
+    if (!dom.mobileSearchInput || !dom.mobileSearchInput.value.trim()) {
+      dom.appContainer.classList.remove('mobile-search-open');
+    }
   }
 }
 
@@ -494,7 +496,20 @@ export function handleGlobalKeydown(e) {
       closeNoteModal();
       e.preventDefault();
     } else if (dom.appContainer && dom.appContainer.classList.contains('mobile-search-open')) {
+      if (dom.mobileSearchInput) dom.mobileSearchInput.value = '';
+      if (state.currentViewMode === 'docs') {
+        if (dom.docsSearchInput) {
+          dom.docsSearchInput.value = '';
+          dom.docsSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      } else {
+        if (dom.searchInput) {
+          dom.searchInput.value = '';
+          dom.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
       dom.appContainer.classList.remove('mobile-search-open');
+      if (dom.mobileSearchClose) dom.mobileSearchClose.textContent = 'Done';
       e.preventDefault();
     } else if (dom.appContainer && dom.appContainer.classList.contains('mobile-show-preview')) {
       showMobileList();
@@ -595,59 +610,100 @@ export function setupFinderListeners() {
   }
 
   // Mobile Bottom Search Handlers
-  function openMobileSearch() {
+  function openMobileSearch(e) {
+    if (e && e.type === 'touchend') {
+      e.preventDefault();
+    }
     if (!dom.appContainer || !dom.mobileSearchInput) return;
     dom.appContainer.classList.add('mobile-search-open');
     const isDocs = state.currentViewMode === 'docs';
     dom.mobileSearchInput.placeholder = isDocs ? 'Search documentation...' : 'Search notes & tasks...';
     dom.mobileSearchInput.value = isDocs ? (dom.docsSearchInput?.value || '') : (dom.searchInput?.value || '');
-    if (dom.mobileSearchClear) {
-      dom.mobileSearchClear.style.display = dom.mobileSearchInput.value ? 'block' : 'none';
+    if (dom.mobileSearchClose) {
+      dom.mobileSearchClose.textContent = 'Done';
     }
-    setTimeout(() => {
-      dom.mobileSearchInput.focus();
-    }, 60);
+    // Synchronous focus directly in user gesture stack for iPhone / iOS Safari
+    dom.mobileSearchInput.focus();
+    if (typeof dom.mobileSearchInput.setSelectionRange === 'function') {
+      const len = dom.mobileSearchInput.value.length;
+      dom.mobileSearchInput.setSelectionRange(len, len);
+    }
   }
 
   function closeMobileSearch() {
     if (!dom.appContainer) return;
     dom.appContainer.classList.remove('mobile-search-open');
+    if (dom.mobileSearchClose) {
+      dom.mobileSearchClose.textContent = 'Done';
+    }
+  }
+
+  function clearMobileSearch() {
+    if (dom.mobileSearchInput) {
+      dom.mobileSearchInput.value = '';
+    }
+    if (state.currentViewMode === 'docs') {
+      if (dom.docsSearchInput) {
+        dom.docsSearchInput.value = '';
+        dom.docsSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    } else {
+      if (dom.searchInput) {
+        dom.searchInput.value = '';
+        dom.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+    closeMobileSearch();
   }
 
   if (dom.mobileSearchBtn) {
     dom.mobileSearchBtn.addEventListener('click', openMobileSearch);
+    dom.mobileSearchBtn.addEventListener('touchend', openMobileSearch, { passive: false });
   }
 
   if (dom.mobileSearchClose) {
-    dom.mobileSearchClose.addEventListener('click', closeMobileSearch);
-  }
-
-  if (dom.mobileSearchClear) {
-    dom.mobileSearchClear.addEventListener('click', () => {
-      if (dom.mobileSearchInput) {
-        dom.mobileSearchInput.value = '';
-        dom.mobileSearchClear.style.display = 'none';
-        dom.mobileSearchInput.focus();
-      }
-      if (state.currentViewMode === 'docs') {
-        if (dom.docsSearchInput) {
-          dom.docsSearchInput.value = '';
-          dom.docsSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    dom.mobileSearchClose.addEventListener('click', () => {
+      const btnText = (dom.mobileSearchClose.textContent || '').trim();
+      if (btnText === 'Done') {
+        // Blur to dismiss keyboard
+        if (dom.mobileSearchInput) {
+          dom.mobileSearchInput.blur();
+        }
+        // If there is query text, keep search dock open at bottom and switch to 'Clear'
+        if (dom.mobileSearchInput && dom.mobileSearchInput.value.trim()) {
+          dom.mobileSearchClose.textContent = 'Clear';
+        } else {
+          // If empty, close search dock and restore floating search FAB
+          closeMobileSearch();
         }
       } else {
-        if (dom.searchInput) {
-          dom.searchInput.value = '';
-          dom.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-        }
+        // Button says 'Clear': wipe input, reset search, close dock, restore search FAB
+        clearMobileSearch();
       }
     });
   }
 
   if (dom.mobileSearchInput) {
+    dom.mobileSearchInput.addEventListener('focus', () => {
+      if (dom.mobileSearchClose) {
+        dom.mobileSearchClose.textContent = 'Done';
+      }
+    });
+
+    dom.mobileSearchInput.addEventListener('blur', () => {
+      if (dom.mobileSearchClose) {
+        dom.mobileSearchClose.textContent = dom.mobileSearchInput.value.trim() ? 'Clear' : 'Done';
+      }
+    });
+
     dom.mobileSearchInput.addEventListener('input', () => {
       const val = dom.mobileSearchInput.value;
-      if (dom.mobileSearchClear) {
-        dom.mobileSearchClear.style.display = val ? 'block' : 'none';
+      if (dom.mobileSearchClose) {
+        if (document.activeElement === dom.mobileSearchInput) {
+          dom.mobileSearchClose.textContent = 'Done';
+        } else {
+          dom.mobileSearchClose.textContent = val.trim() ? 'Clear' : 'Done';
+        }
       }
       if (state.currentViewMode === 'docs') {
         if (dom.docsSearchInput) {

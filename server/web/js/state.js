@@ -18,6 +18,7 @@ export const state = {
   docsTree: [],
   selectedDocPath: null,
   currentDocContent: null,
+  docsCache: new Map(),
   docsExpandedFolders: new Set(['docs', 'proposals']),
 };
 

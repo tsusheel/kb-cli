@@ -64,6 +64,9 @@ export async function initDocs() {
   // 4. Check for URL deep linking
   handleDocsRouting();
   window.addEventListener('popstate', handleDocsRouting);
+
+  // 5. Pre-load documentation tree and prefetch all documents in background
+  loadDocsTree();
 }
 
 /**
@@ -140,21 +143,61 @@ export async function switchViewMode(mode, targetDocPath = null) {
 }
 
 /**
- * Loads the documentation directory tree from the backend.
+ * Loads the documentation directory tree from the backend and prefetches all documents.
  */
 export async function loadDocsTree() {
   try {
-    if (dom.docsTree) {
-      dom.docsTree.innerHTML = '<div class="loading-state">Loading documentation...</div>';
+    if (!state.docsTree || state.docsTree.length === 0) {
+      if (dom.docsTree) {
+        dom.docsTree.innerHTML = '<div class="loading-state">Loading documentation...</div>';
+      }
+      state.docsTree = await fetchDocsTree();
     }
-    state.docsTree = await fetchDocsTree();
     renderDocsTree(dom.docsSearchInput?.value || '');
+    prefetchAllDocs(state.docsTree);
   } catch (err) {
     console.error('Error loading docs tree:', err);
     if (dom.docsTree) {
       dom.docsTree.innerHTML = `<div class="empty-list">Failed to load documentation: ${escapeHtml(err.message)}</div>`;
     }
   }
+}
+
+/**
+ * Prefetches all documentation files in the background and caches their content and pre-rendered HTML.
+ */
+function prefetchAllDocs(tree) {
+  if (!tree || !Array.isArray(tree)) return;
+
+  function collectPaths(items) {
+    const paths = [];
+    for (const item of items) {
+      if (item.type === 'file' && item.path) {
+        paths.push(item.path);
+      }
+      if (item.children && Array.isArray(item.children)) {
+        paths.push(...collectPaths(item.children));
+      }
+    }
+    return paths;
+  }
+
+  const paths = collectPaths(tree);
+  paths.forEach(async (docPath) => {
+    if (state.docsCache && state.docsCache.has(docPath)) return;
+    try {
+      const data = await fetchDocContent(docPath);
+      if (state.docsCache && !state.docsCache.has(docPath)) {
+        const html = renderMarkdown(data.content);
+        state.docsCache.set(docPath, {
+          content: data.content,
+          html,
+        });
+      }
+    } catch {
+      // Ignore background prefetch errors
+    }
+  });
 }
 
 /**
@@ -292,38 +335,65 @@ export async function selectDoc(docPath, updateUrl = true, openMobilePreview = t
     dom.previewShortId.textContent = 'DOC';
   }
 
+  // Fast path: if document is cached in memory, render immediately with zero flicker
+  if (state.docsCache && state.docsCache.has(docPath)) {
+    const cachedData = state.docsCache.get(docPath);
+    renderLoadedDoc(docPath, cachedData.content, cachedData.html, openMobilePreview);
+    return;
+  }
+
+  // Not cached yet: smoothly dim preview pane instead of collapsing layout
+  if (dom.previewPane) {
+    dom.previewPane.classList.add('doc-transitioning');
+  }
+
   try {
     const data = await fetchDocContent(docPath);
     if (state.selectedDocPath !== docPath) return;
-    state.currentDocContent = data.content;
-
-    // Derive title from content or path
-    let title = docPath;
-    const firstLine = data.content.split('\n')[0];
-    if (firstLine.startsWith('# ')) {
-      title = firstLine.replace('# ', '').trim();
+    const html = renderMarkdown(data.content);
+    if (state.docsCache) {
+      state.docsCache.set(docPath, { content: data.content, html });
     }
-    if (dom.previewTitle) dom.previewTitle.textContent = title;
-
-    // Render Markdown and Mermaid diagrams
-    if (dom.previewMarkdownBody) {
-      dom.previewMarkdownBody.innerHTML = renderMarkdown(data.content);
-      applyPostMarkdownEnhancements(dom.previewMarkdownBody);
-    }
-
-    if (dom.previewRawBody) {
-      dom.previewRawBody.textContent = data.content;
-    }
-
-    scrollPreviewToTop();
-    updateViewModeDisplay();
-    if (openMobilePreview) {
-      showMobileDetail();
-    }
+    renderLoadedDoc(docPath, data.content, html, openMobilePreview);
   } catch (err) {
     console.error('Error fetching doc content:', err);
     if (dom.previewMarkdownBody) {
       dom.previewMarkdownBody.innerHTML = `<div class="empty-list">Failed to load doc: ${escapeHtml(err.message)}</div>`;
     }
+  } finally {
+    if (dom.previewPane) {
+      dom.previewPane.classList.remove('doc-transitioning');
+    }
+  }
+}
+
+/**
+ * Renders loaded document markdown and triggers post-render enhancements.
+ */
+function renderLoadedDoc(docPath, content, html, openMobilePreview) {
+  state.currentDocContent = content;
+
+  // Derive title from content or path
+  let title = docPath;
+  const firstLine = content.split('\n')[0];
+  if (firstLine.startsWith('# ')) {
+    title = firstLine.replace('# ', '').trim();
+  }
+  if (dom.previewTitle) dom.previewTitle.textContent = title;
+
+  // Render Markdown and Mermaid diagrams
+  if (dom.previewMarkdownBody) {
+    dom.previewMarkdownBody.innerHTML = html || renderMarkdown(content);
+    applyPostMarkdownEnhancements(dom.previewMarkdownBody);
+  }
+
+  if (dom.previewRawBody) {
+    dom.previewRawBody.textContent = content;
+  }
+
+  scrollPreviewToTop();
+  updateViewModeDisplay();
+  if (openMobilePreview) {
+    showMobileDetail();
   }
 }
