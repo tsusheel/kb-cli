@@ -3,7 +3,7 @@
  * Caches app shell for offline use and caches read-only API requests (items, tags, stats)
  */
 
-const CACHE_VERSION = 'v17';
+const CACHE_VERSION = 'v18';
 const SHELL_CACHE = `kb-shell-${CACHE_VERSION}`;
 const DATA_CACHE = `kb-data-${CACHE_VERSION}`;
 

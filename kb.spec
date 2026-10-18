@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           kb
-Version:        0.1.9
+Version:        0.1.10
 Release:        1%{?dist}
 Summary:        Knowledge Base CLI
 
@@ -37,6 +37,12 @@ fi
 %{_bindir}/kb
 
 %changelog
+* Sun Oct 18 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.10-1
+- Add interactive swipe gesture navigation across notes and documents
+- Add floating swipe direction indicator pill with SVG arrows and ellipsis truncation
+- Distinguish mobile Clear and Done button colors in bottom search dock
+- Reset search state and restore search icon when switching between notes and docs tabs
+
 * Sun Oct 18 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.9-1
 - Add touch pan and dual-finger pinch zoom support for Mermaid diagrams on mobile
 - Add horizontally scrollable responsive wrappers for Markdown tables
