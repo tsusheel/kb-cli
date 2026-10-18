@@ -54,26 +54,42 @@ function getAdjacentTitle(direction) {
 }
 
 /**
- * Determines whether the event target is inside an element that handles horizontal scrolling.
+ * Determines whether the event target is inside an element that handles horizontal interaction,
+ * such as a Mermaid diagram, scrollable table, code block, or action buttons.
  */
 function isInsideHorizontalScrollable(target) {
+  if (!target) return false;
+
+  // 1. Unconditionally exempt interactive components that handle touch, pan, or scroll
+  if (typeof target.closest === 'function') {
+    const scrollableComponent = target.closest(
+      '.mermaid-block-wrapper, .mermaid-viewport, .mermaid-diagram, ' +
+      '.markdown-table-wrapper, table, thead, tbody, tr, th, td, ' +
+      'pre, code, .code-block-wrapper, ' +
+      '.tag-scroll-area, .preview-actions, button, a'
+    );
+    if (scrollableComponent) {
+      return true;
+    }
+  }
+
+  // 2. Also check if target is an SVG element inside a mermaid viewport
+  if (target.ownerSVGElement && target.ownerSVGElement.closest && target.ownerSVGElement.closest('.mermaid-viewport')) {
+    return true;
+  }
+
+  // 3. Generic fallback: check if any ancestor explicitly scrolls horizontally
   let el = target;
   while (el && el !== dom.previewPane && el !== document.body) {
-    if (
-      el.classList &&
-      (el.classList.contains('markdown-table-wrapper') ||
-        el.classList.contains('mermaid-viewport') ||
-        el.classList.contains('tag-scroll-area') ||
-        el.classList.contains('preview-actions') ||
-        el.tagName === 'PRE' ||
-        el.tagName === 'CODE')
-    ) {
-      if (el.scrollWidth > el.clientWidth + 4) {
+    if (el instanceof HTMLElement) {
+      const overflowX = window.getComputedStyle(el).overflowX;
+      if ((overflowX === 'auto' || overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 4) {
         return true;
       }
     }
     el = el.parentElement;
   }
+
   return false;
 }
 
@@ -277,11 +293,12 @@ export function initSwipeNavigation() {
 
       // 1. Direction lock detection
       if (!isSwiping) {
-        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 7) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx) * 0.7) {
           isLockedVertical = true;
           return;
         }
-        if (Math.abs(dx) > Math.abs(dy) * 1.2 && Math.abs(dx) > 7) {
+        // Require deliberate horizontal movement: at least 25px and distinctly horizontal (>= 2.2x vertical)
+        if (Math.abs(dx) >= 25 && Math.abs(dx) >= Math.abs(dy) * 2.2) {
           isSwiping = true;
           dom.previewContent.style.willChange = 'transform, opacity';
           dom.previewContent.style.transition = 'none';
@@ -307,7 +324,7 @@ export function initSwipeNavigation() {
         dom.previewContent.style.opacity = `${opacity}`;
 
         // Update floating swipe direction indicator
-        if (Math.abs(currentDeltaX) >= 24) {
+        if (Math.abs(currentDeltaX) >= 32) {
           const dir = currentDeltaX < 0 ? 1 : -1;
           const hasItem = canNavigate(dir);
           const title = getAdjacentTitle(dir);
@@ -336,11 +353,15 @@ export function initSwipeNavigation() {
     const absDx = Math.abs(currentDeltaX);
     const dt = Math.max(1, Date.now() - startTime);
     const velocity = absDx / dt;
-    const isFlick = velocity > 0.42 && absDx > 30;
-    const isDrag = absDx > Math.min(window.innerWidth * 0.22, 85);
+
+    // Strict intentionality: require a long scroll (at least 35% of screen width, min 140px),
+    // or a deliberate fast flick that still covers at least 110px. Small scrolls are ignored.
+    const longScrollThreshold = Math.min(Math.max(window.innerWidth * 0.35, 140), 250);
+    const isLongScroll = absDx >= longScrollThreshold;
+    const isFastLongFlick = velocity > 0.55 && absDx >= 110;
     const dir = currentDeltaX < 0 ? 1 : -1;
 
-    if ((isFlick || isDrag) && canNavigate(dir)) {
+    if ((isLongScroll || isFastLongFlick) && canNavigate(dir)) {
       performSwipeTransition(dir);
     } else {
       resetToCenter();
@@ -359,10 +380,10 @@ export function initSwipeNavigation() {
         wheelDeltaX = 0;
         return;
       }
-      if (Math.abs(e.deltaX) < 14) return;
+      if (Math.abs(e.deltaX) < 18) return;
       if (isTransitioning || wheelCooldown || isModalActive()) return;
 
-      // Disregard when preview is empty or inside scrollable table/code
+      // Disregard when preview is empty or inside scrollable table/code/diagram
       if (dom.previewEmpty && dom.previewEmpty.style.display !== 'none') return;
       if (dom.previewContent && dom.previewContent.style.display === 'none') return;
       if (isInsideHorizontalScrollable(e.target)) return;
@@ -371,17 +392,17 @@ export function initSwipeNavigation() {
       clearTimeout(wheelTimer);
       wheelTimer = setTimeout(() => {
         wheelDeltaX = 0;
-      }, 180);
+      }, 200);
 
-      // Threshold for trackpad flick (deltaX > 0 is scroll right -> next item)
-      if (Math.abs(wheelDeltaX) >= 42) {
+      // Threshold for trackpad deliberate scroll (deltaX > 0 is scroll right -> next item)
+      if (Math.abs(wheelDeltaX) >= 90) {
         const dir = wheelDeltaX > 0 ? 1 : -1;
         wheelDeltaX = 0;
         if (canNavigate(dir)) {
           wheelCooldown = true;
           setTimeout(() => {
             wheelCooldown = false;
-          }, 380);
+          }, 450);
           performSwipeTransition(dir);
         }
       }
