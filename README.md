@@ -68,7 +68,7 @@ nix profile install github:tsusheel/kb-cli
 
 #### Prerequisites
 - **Go 1.21+** installed ([Download Go](https://go.dev/dl/))
-- **Node.js & npm** (optional, only required if modifying web frontend assets in `server/web/`)
+- **Node.js & npm** (required for bundling web frontend assets in `server/web/` and development hooks)
 
 #### Build Steps
 ```bash
@@ -76,7 +76,7 @@ nix profile install github:tsusheel/kb-cli
 git clone https://github.com/tsusheel/kb-cli.git
 cd kb-cli
 
-# 2. (Optional) Rebuild web assets if edited
+# 2. Install dependencies & configure Git hooks
 npm install
 npm run build
 
@@ -91,6 +91,12 @@ On Windows (PowerShell):
 ```powershell
 go build -o kb.exe .
 ```
+
+> [!TIP]
+> **Automatic Web Bundle Hook (`pre-push`)**: Running `npm install` automatically activates the repo's Git hooks in `.githooks/`. Whenever you push to `main`, the hook automatically runs `npm run build` and ensures the bundled assets in `server/web/dist/` are synchronized and committed. If you are developing Go without Node/npm or skipped `npm install`, you can manually activate the hook at any time via:
+> ```bash
+> git config core.hooksPath .githooks
+> ```
 
 ---
 
