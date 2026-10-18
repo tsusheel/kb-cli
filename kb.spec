@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           kb
-Version:        0.1.7
+Version:        0.1.8
 Release:        1%{?dist}
 Summary:        Knowledge Base CLI
 
@@ -37,6 +37,12 @@ fi
 %{_bindir}/kb
 
 %changelog
+* Sun Oct 18 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.8-1
+- Add automatic Git pre-push hook for web bundle verification and auto-build
+- Add tree visualization for CLI documentation and commands (kb docs --tree)
+- Improve Mermaid diagram contrast, rendering, and text clipping in docs
+- Optimize mobile responsive layout for diagrams and documentation views
+
 * Sun Oct 18 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.7-1
 - Modularize client JavaScript into clean single-responsibility ES modules
 - Add esbuild bundling and minification pipeline for web assets
