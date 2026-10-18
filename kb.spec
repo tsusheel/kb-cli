@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           kb
-Version:        0.1.11
+Version:        0.1.12
 Release:        1%{?dist}
 Summary:        Knowledge Base CLI
 
@@ -37,6 +37,11 @@ fi
 %{_bindir}/kb
 
 %changelog
+* Sun Oct 18 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.12-1
+- Decrease horizontal scroll sensitivity to require scrolling > 60% of screen width
+- Dynamically pin mobile search dock directly above software keyboard using Visual Viewport API
+- Prevent premature scroll jumps on mobile search input focus
+
 * Sun Oct 18 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.11-1
 - Unconditionally exempt Mermaid diagrams, tables, and code blocks from note swipe navigation
 - Increase swipe initiation threshold and require intentional long scroll for navigation

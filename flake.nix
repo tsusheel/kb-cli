@@ -24,7 +24,7 @@
         {
           default = pkgs.buildGoModule rec {
             pname = "kb";
-            version = "0.1.11";
+            version = "0.1.12";
 
             src = ./.;
 
