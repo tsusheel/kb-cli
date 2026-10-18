@@ -17,6 +17,7 @@ import (
 	"github.com/tsusheel/kb-cli/utils"
 )
 
+//go:generate npm run build
 //go:embed web/*
 var embeddedFiles embed.FS
 
@@ -68,9 +69,15 @@ func RegisterRoutes() http.Handler {
 		}
 		if strings.HasSuffix(path, "manifest.json") || strings.HasSuffix(path, ".webmanifest") {
 			w.Header().Set("Content-Type", "application/manifest+json")
-		} else if path == "sw.js" {
+		} else if strings.HasSuffix(path, ".js") {
 			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-			w.Header().Set("Service-Worker-Allowed", "/")
+			if path == "sw.js" {
+				w.Header().Set("Service-Worker-Allowed", "/")
+			}
+		} else if strings.HasSuffix(path, ".css") {
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		} else if strings.HasSuffix(path, ".wasm") {
+			w.Header().Set("Content-Type", "application/wasm")
 		}
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Pragma", "no-cache")

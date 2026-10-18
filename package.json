@@ -1,0 +1,14 @@
+{
+  "name": "kb-cli",
+  "version": "0.1.6",
+  "description": "Knowledge Base CLI web assets build pipeline",
+  "private": true,
+  "scripts": {
+    "build:js": "npx --yes esbuild server/web/js/app.js --bundle --minify --format=esm --outfile=server/web/dist/app.min.js",
+    "build:css": "npx --yes esbuild server/web/style.css --minify --outfile=server/web/dist/style.min.css",
+    "build": "npm run build:js && npm run build:css",
+    "watch:js": "npx --yes esbuild server/web/js/app.js --bundle --format=esm --outfile=server/web/dist/app.min.js --watch",
+    "watch:css": "npx --yes esbuild server/web/style.css --outfile=server/web/dist/style.min.css --watch",
+    "watch": "npx --yes concurrently \"npm:watch:js\" \"npm:watch:css\""
+  }
+}

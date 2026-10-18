@@ -14,7 +14,10 @@
 # Dependency directories
 vendor/
 bin/
-dist/
+/dist/
+
+# Other directories
+kb-export/
 
 # Environment variables
 .env
