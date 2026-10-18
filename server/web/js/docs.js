@@ -321,10 +321,23 @@ export async function selectDoc(docPath, updateUrl = true, openMobilePreview = t
   state.selectedDocPath = docPath;
   scrollPreviewToTop();
 
+  // Auto-expand folder in tree if document is inside one
+  if (docPath && docPath.includes('/')) {
+    const folder = docPath.split('/')[0];
+    if (!state.docsExpandedFolders.has(folder)) {
+      state.docsExpandedFolders.add(folder);
+      renderDocsTree(dom.docsSearchInput?.value || '');
+    }
+  }
+
   // Update active item in tree
   if (dom.docsTree) {
     dom.docsTree.querySelectorAll('.tree-file-item').forEach((el) => {
-      el.classList.toggle('active', el.getAttribute('data-path') === docPath);
+      const isActive = el.getAttribute('data-path') === docPath;
+      el.classList.toggle('active', isActive);
+      if (isActive) {
+        el.scrollIntoView({ block: 'nearest' });
+      }
     });
   }
 
@@ -407,4 +420,58 @@ function renderLoadedDoc(docPath, content, html, openMobilePreview) {
   if (openMobilePreview) {
     showMobileDetail();
   }
+}
+
+export function getOrderedDocPaths() {
+  const paths = [];
+  function collect(items) {
+    if (!items || !Array.isArray(items)) return;
+    for (const item of items) {
+      const p = item.path || item.Path;
+      if (p) paths.push(p);
+      const children = item.children || item.Children;
+      if (children && children.length > 0) {
+        collect(children);
+      }
+    }
+  }
+  collect(state.docsTree);
+  return paths;
+}
+
+export function canNavigateDocs(direction) {
+  const paths = getOrderedDocPaths();
+  if (paths.length === 0) return false;
+  let idx = paths.indexOf(state.selectedDocPath);
+  if (idx === -1) idx = 0;
+  const targetIdx = idx + direction;
+  return targetIdx >= 0 && targetIdx < paths.length;
+}
+
+export async function navigateDocs(direction) {
+  const paths = getOrderedDocPaths();
+  if (paths.length === 0) return false;
+  let idx = paths.indexOf(state.selectedDocPath);
+  if (idx === -1) idx = 0;
+  const targetIdx = idx + direction;
+  if (targetIdx >= 0 && targetIdx < paths.length) {
+    const isMobile = window.innerWidth <= 768;
+    await selectDoc(paths[targetIdx], true, isMobile);
+    return true;
+  }
+  return false;
+}
+
+export function getAdjacentDocTitle(direction) {
+  const paths = getOrderedDocPaths();
+  if (paths.length === 0) return null;
+  let idx = paths.indexOf(state.selectedDocPath);
+  if (idx === -1) idx = 0;
+  const targetIdx = idx + direction;
+  if (targetIdx >= 0 && targetIdx < paths.length) {
+    const p = paths[targetIdx];
+    const parts = p.split('/');
+    return parts[parts.length - 1];
+  }
+  return null;
 }

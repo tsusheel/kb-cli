@@ -11,6 +11,7 @@ import { initMarkdownLibraries } from './markdown.js';
 import { initPWA, handlePWAUrlAction } from './pwa.js';
 import { setupModalListeners } from './modal.js';
 import { initDocs } from './docs.js';
+import { initSwipeNavigation } from './swipe.js';
 import {
   setupFinderListeners,
   loadData,
@@ -26,7 +27,7 @@ async function init() {
   // 2. Documentation subsystem
   initDocs();
 
-  // 2. Service Worker & Offline PWA sync
+  // 3. Service Worker & Offline PWA sync
   initPWA({
     onOnlineSync: async () => {
       await loadData();
@@ -35,8 +36,9 @@ async function init() {
     },
   });
 
-  // 3. UI Event Listeners
+  // 4. UI Event Listeners & Gestures
   setupFinderListeners();
+  initSwipeNavigation();
 
   setupModalListeners({
     onNoteSaved: async () => {

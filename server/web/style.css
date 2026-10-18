@@ -506,6 +506,69 @@ html, body {
   overflow-y: auto;
   overflow-x: hidden;
   transition: opacity 0.12s ease;
+  position: relative;
+}
+
+/* Floating Swipe Navigation Indicator */
+.preview-swipe-indicator {
+  position: sticky;
+  top: 14px;
+  align-self: center;
+  max-width: min(86vw, 380px);
+  min-width: 130px;
+  height: 32px;
+  min-height: 32px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(22, 27, 34, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(88, 166, 255, 0.35);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 16px;
+  border-radius: var(--radius-full);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-8px) scale(0.95);
+  transition: opacity 0.16s ease, transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 60;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  margin-bottom: -32px;
+}
+
+.preview-swipe-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.preview-swipe-arrow {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-blue);
+  line-height: 1;
+}
+
+.preview-swipe-indicator.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.preview-swipe-indicator.at-boundary {
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--text-muted);
 }
 
 .preview-pane.doc-transitioning {

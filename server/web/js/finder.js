@@ -277,6 +277,29 @@ export async function selectItem(index, scroll = true) {
   }
 }
 
+export function canNavigateNotes(direction) {
+  if (!state.filteredItems || state.filteredItems.length === 0) return false;
+  const targetIndex = state.selectedIndex + direction;
+  return targetIndex >= 0 && targetIndex < state.filteredItems.length;
+}
+
+export async function navigateNotes(direction) {
+  if (!canNavigateNotes(direction)) return false;
+  const targetIndex = state.selectedIndex + direction;
+  await selectItem(targetIndex, true);
+  return true;
+}
+
+export function getAdjacentNoteTitle(direction) {
+  if (!state.filteredItems) return null;
+  const targetIndex = state.selectedIndex + direction;
+  if (targetIndex >= 0 && targetIndex < state.filteredItems.length) {
+    const item = state.filteredItems[targetIndex];
+    return item ? item.display : null;
+  }
+  return null;
+}
+
 export function toggleViewMode() {
   state.isRawView = !state.isRawView;
   updateViewModeDisplay();

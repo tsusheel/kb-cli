@@ -22,6 +22,10 @@ export const dom = {
 
   // Preview Pane
   previewPane: document.getElementById('preview-pane'),
+  previewSwipeIndicator: document.getElementById('preview-swipe-indicator'),
+  previewSwipeText: document.getElementById('preview-swipe-text'),
+  swipeArrowLeft: document.getElementById('swipe-arrow-left'),
+  swipeArrowRight: document.getElementById('swipe-arrow-right'),
   previewEmpty: document.getElementById('preview-empty'),
   previewContent: document.getElementById('preview-content'),
   previewTitle: document.getElementById('preview-title'),
