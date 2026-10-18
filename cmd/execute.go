@@ -19,7 +19,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-var Version = "0.1.8"
+var Version = "0.1.9"
 
 func SetVersion(v string) {
 	if v != "" {

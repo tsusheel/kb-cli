@@ -1,7 +1,7 @@
 %global debug_package %{nil}
 
 Name:           kb
-Version:        0.1.8
+Version:        0.1.9
 Release:        1%{?dist}
 Summary:        Knowledge Base CLI
 
@@ -37,6 +37,13 @@ fi
 %{_bindir}/kb
 
 %changelog
+* Sun Oct 18 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.9-1
+- Add touch pan and dual-finger pinch zoom support for Mermaid diagrams on mobile
+- Add horizontally scrollable responsive wrappers for Markdown tables
+- Add floating action buttons (FAB) for mobile back navigation and search trigger
+- Add mobile slide-up bottom search dock for notes and documentation search
+- Streamline mobile header layout and tab switching navigation flow
+
 * Sun Oct 18 2026 Sushil Thakur <tsusheel.135@gmail.com> - 0.1.8-1
 - Add automatic Git pre-push hook for web bundle verification and auto-build
 - Add tree visualization for CLI documentation and commands (kb docs --tree)
