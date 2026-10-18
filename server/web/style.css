@@ -53,6 +53,8 @@ html, body {
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* Minimal Scrollbar */
@@ -1409,6 +1411,33 @@ html, body {
 @media (max-width: 768px) {
   .mobile-only {
     display: block;
+  }
+
+  /* Prevent iOS Safari auto-zoom on input focus by enforcing >= 16px font size */
+  #search-input,
+  .form-input,
+  .form-select,
+  .form-textarea,
+  .auth-password-wrapper input,
+  input[type="text"],
+  input[type="password"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  #search-input {
+    height: 36px;
+    padding: 0 45px 0 12px;
+  }
+
+  .form-input, .form-select {
+    padding: 9px 12px;
+  }
+
+  .form-textarea {
+    padding: 10px 12px;
   }
 
   .app-header {
