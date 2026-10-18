@@ -636,6 +636,62 @@ export function setMobileSearchButtonState(mode) {
   }
 }
 
+/**
+ * Dynamically pins the mobile search dock directly above the software keyboard
+ * using the modern window.visualViewport API across iOS Safari & Android Chrome.
+ */
+export function updateMobileSearchPosition() {
+  if (!dom.mobileBottomSearch || !dom.appContainer?.classList.contains('mobile-search-open')) {
+    return;
+  }
+
+  if (window.visualViewport) {
+    const vv = window.visualViewport;
+    // Calculate how much the keyboard / visual viewport offset covers from the bottom of the screen.
+    // In CSS layout, fixed bottom: 0 is at window.innerHeight.
+    // The bottom edge of the visual viewport is at (vv.offsetTop + vv.height).
+    const offsetFromBottom = Math.max(
+      0,
+      Math.round(window.innerHeight - (vv.offsetTop + vv.height))
+    );
+
+    dom.mobileBottomSearch.style.bottom = `${offsetFromBottom}px`;
+
+    // When lifted above the keyboard, safe area padding is covered by the keyboard,
+    // so we use a clean compact 10px padding.
+    if (offsetFromBottom > 10) {
+      dom.mobileBottomSearch.style.paddingBottom = '10px';
+    } else {
+      dom.mobileBottomSearch.style.paddingBottom = '';
+    }
+
+    // Ensure list content can be scrolled comfortably above the search bar
+    const dockHeight = dom.mobileBottomSearch.offsetHeight || 62;
+    const totalBottomPadding = `${offsetFromBottom + dockHeight + 10}px`;
+    if (dom.resultsList) {
+      dom.resultsList.style.paddingBottom = totalBottomPadding;
+    }
+    if (dom.docsTree) {
+      dom.docsTree.style.paddingBottom = totalBottomPadding;
+    }
+  } else {
+    dom.mobileBottomSearch.style.bottom = '0px';
+  }
+}
+
+export function resetMobileSearchPosition() {
+  if (dom.mobileBottomSearch) {
+    dom.mobileBottomSearch.style.bottom = '';
+    dom.mobileBottomSearch.style.paddingBottom = '';
+  }
+  if (dom.resultsList) {
+    dom.resultsList.style.paddingBottom = '';
+  }
+  if (dom.docsTree) {
+    dom.docsTree.style.paddingBottom = '';
+  }
+}
+
 export function resetMobileSearch() {
   if (dom.mobileSearchInput) {
     dom.mobileSearchInput.value = '';
@@ -647,6 +703,7 @@ export function resetMobileSearch() {
   if (dom.appContainer) {
     dom.appContainer.classList.remove('mobile-search-open');
   }
+  resetMobileSearchPosition();
   isMobileSearchFocused = false;
 }
 
@@ -672,12 +729,26 @@ export function setupFinderListeners() {
     isMobileSearchFocused = true;
     setMobileSearchButtonState('done');
 
-    // Synchronous focus directly in user gesture stack for iPhone / iOS Safari
-    dom.mobileSearchInput.focus();
+    updateMobileSearchPosition();
+
+    // Focus input directly with preventScroll to stop iOS from jumping
+    try {
+      dom.mobileSearchInput.focus({ preventScroll: true });
+    } catch {
+      dom.mobileSearchInput.focus();
+    }
+
     if (typeof dom.mobileSearchInput.setSelectionRange === 'function') {
       const len = dom.mobileSearchInput.value.length;
       dom.mobileSearchInput.setSelectionRange(len, len);
     }
+
+    // Schedule position updates as keyboard opens and finishes animation
+    requestAnimationFrame(updateMobileSearchPosition);
+    setTimeout(updateMobileSearchPosition, 50);
+    setTimeout(updateMobileSearchPosition, 150);
+    setTimeout(updateMobileSearchPosition, 300);
+    setTimeout(updateMobileSearchPosition, 500);
   }
 
   function closeMobileSearch() {
@@ -685,6 +756,7 @@ export function setupFinderListeners() {
     dom.appContainer.classList.remove('mobile-search-open');
     isMobileSearchFocused = false;
     setMobileSearchButtonState('done');
+    resetMobileSearchPosition();
   }
 
   function clearMobileSearch() {
@@ -704,6 +776,13 @@ export function setupFinderListeners() {
     }
     closeMobileSearch();
   }
+
+  // Dynamic visualViewport tracking for software keyboard repositioning
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', updateMobileSearchPosition);
+    window.visualViewport.addEventListener('scroll', updateMobileSearchPosition);
+  }
+  window.addEventListener('resize', updateMobileSearchPosition);
 
   if (dom.mobileSearchBtn) {
     dom.mobileSearchBtn.addEventListener('click', openMobileSearch);
@@ -748,11 +827,17 @@ export function setupFinderListeners() {
     dom.mobileSearchInput.addEventListener('focus', () => {
       isMobileSearchFocused = true;
       setMobileSearchButtonState('done');
+      updateMobileSearchPosition();
+      setTimeout(updateMobileSearchPosition, 100);
+      setTimeout(updateMobileSearchPosition, 300);
     });
 
     dom.mobileSearchInput.addEventListener('blur', () => {
       isMobileSearchFocused = false;
       setMobileSearchButtonState(dom.mobileSearchInput.value.trim() ? 'clear' : 'done');
+      updateMobileSearchPosition();
+      setTimeout(updateMobileSearchPosition, 100);
+      setTimeout(updateMobileSearchPosition, 300);
     });
 
     dom.mobileSearchInput.addEventListener('keydown', (e) => {

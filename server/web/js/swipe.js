@@ -197,10 +197,11 @@ async function performSwipeTransition(direction) {
   isTransitioning = true;
   hideIndicator();
 
-  // 1. Slide out in swipe direction
-  const exitX = direction === 1 ? -120 : 120;
+  // 1. Slide out smoothly continuing past the screen edge in the swipe direction
+  const exitDistance = Math.max(Math.abs(currentDeltaX) + 80, window.innerWidth * 0.5);
+  const exitX = direction === 1 ? -exitDistance : exitDistance;
   dom.previewContent.style.transition =
-    'transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.16s ease';
+    'transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.18s ease';
   dom.previewContent.style.transform = `translate3d(${exitX}px, 0, 0)`;
   dom.previewContent.style.opacity = '0';
 
@@ -225,6 +226,7 @@ async function performSwipeTransition(direction) {
 
     setTimeout(() => {
       isTransitioning = false;
+      currentDeltaX = 0;
       if (dom.previewContent) {
         dom.previewContent.style.willChange = '';
         dom.previewContent.style.transform = '';
@@ -232,7 +234,7 @@ async function performSwipeTransition(direction) {
         dom.previewContent.style.opacity = '';
       }
     }, 250);
-  }, 160);
+  }, 180);
 }
 
 /**
@@ -351,17 +353,18 @@ export function initSwipeNavigation() {
     hideIndicator();
 
     const absDx = Math.abs(currentDeltaX);
-    const dt = Math.max(1, Date.now() - startTime);
-    const velocity = absDx / dt;
 
-    // Strict intentionality: require a long scroll (at least 35% of screen width, min 140px),
-    // or a deliberate fast flick that still covers at least 110px. Small scrolls are ignored.
-    const longScrollThreshold = Math.min(Math.max(window.innerWidth * 0.35, 140), 250);
-    const isLongScroll = absDx >= longScrollThreshold;
-    const isFastLongFlick = velocity > 0.55 && absDx >= 110;
+    // Strict intentionality: Only when the user scrolls more than 60% of their screen width
+    // does it navigate to the next or previous note or document.
+    const screenWidth =
+      window.innerWidth <= 768
+        ? window.innerWidth
+        : (dom.previewPane?.clientWidth || window.innerWidth);
+    const scrollThreshold = screenWidth * 0.60;
+    const isIntentionalSwipe = absDx > scrollThreshold;
     const dir = currentDeltaX < 0 ? 1 : -1;
 
-    if ((isLongScroll || isFastLongFlick) && canNavigate(dir)) {
+    if (isIntentionalSwipe && canNavigate(dir)) {
       performSwipeTransition(dir);
     } else {
       resetToCenter();
@@ -395,7 +398,7 @@ export function initSwipeNavigation() {
       }, 200);
 
       // Threshold for trackpad deliberate scroll (deltaX > 0 is scroll right -> next item)
-      if (Math.abs(wheelDeltaX) >= 90) {
+      if (Math.abs(wheelDeltaX) >= 140) {
         const dir = wheelDeltaX > 0 ? 1 : -1;
         wheelDeltaX = 0;
         if (canNavigate(dir)) {
