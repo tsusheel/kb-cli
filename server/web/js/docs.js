@@ -9,7 +9,7 @@ import { dom } from './dom.js';
 import { fetchDocsTree, fetchDocContent } from './api.js';
 import { renderMarkdown, applyPostMarkdownEnhancements } from './markdown.js';
 import { showMobileDetail, showMobileList, updateViewModeDisplay } from './finder.js';
-import { escapeHtml } from './utils.js';
+import { escapeHtml, scrollPreviewToTop } from './utils.js';
 
 let isDocsInitialized = false;
 
@@ -135,6 +135,7 @@ export async function switchViewMode(mode, targetDocPath = null) {
     }
     // Return mobile view to list if applicable
     showMobileList();
+    scrollPreviewToTop();
   }
 }
 
@@ -264,6 +265,7 @@ function bindTreeEvents() {
  */
 export async function selectDoc(docPath, updateUrl = true, openMobilePreview = true) {
   state.selectedDocPath = docPath;
+  scrollPreviewToTop();
 
   // Update active item in tree
   if (dom.docsTree) {
@@ -292,6 +294,7 @@ export async function selectDoc(docPath, updateUrl = true, openMobilePreview = t
 
   try {
     const data = await fetchDocContent(docPath);
+    if (state.selectedDocPath !== docPath) return;
     state.currentDocContent = data.content;
 
     // Derive title from content or path
@@ -312,6 +315,7 @@ export async function selectDoc(docPath, updateUrl = true, openMobilePreview = t
       dom.previewRawBody.textContent = data.content;
     }
 
+    scrollPreviewToTop();
     updateViewModeDisplay();
     if (openMobilePreview) {
       showMobileDetail();

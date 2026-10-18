@@ -21,6 +21,7 @@ export const dom = {
   mobileSearchClose: document.getElementById('mobile-search-close'),
 
   // Preview Pane
+  previewPane: document.getElementById('preview-pane'),
   previewEmpty: document.getElementById('preview-empty'),
   previewContent: document.getElementById('preview-content'),
   previewTitle: document.getElementById('preview-title'),

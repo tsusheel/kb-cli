@@ -13,6 +13,7 @@ import {
   triggerCopyFeedback,
   fuzzyMatch,
   highlightPositions,
+  scrollPreviewToTop,
 } from './utils.js';
 import {
   fetchItems,
@@ -30,6 +31,7 @@ export function showMobileDetail() {
   if (window.innerWidth <= 768 && dom.appContainer) {
     dom.appContainer.classList.remove('mobile-search-open');
     dom.appContainer.classList.add('mobile-show-preview');
+    scrollPreviewToTop();
   }
 }
 
@@ -257,12 +259,16 @@ export async function selectItem(index, scroll = true) {
     return;
   }
 
+  scrollPreviewToTop();
   renderPreviewBasic(item);
 
   if (!item.is_log) {
     try {
       state.currentNoteDetail = await fetchNoteDetail(item.id);
-      renderPreviewDetail(state.currentNoteDetail);
+      if (state.filteredItems[state.selectedIndex]?.id === item.id) {
+        renderPreviewDetail(state.currentNoteDetail);
+        scrollPreviewToTop();
+      }
     } catch (err) {
       console.error('Error fetching note detail:', err);
     }
@@ -338,6 +344,7 @@ export function renderPreviewBasic(item) {
     dom.previewMarkdownBody.innerHTML = renderMarkdown(rawContent);
     applyPostMarkdownEnhancements(dom.previewMarkdownBody);
   }
+  scrollPreviewToTop();
   updateViewModeDisplay();
 
   if (dom.previewGraphSection) dom.previewGraphSection.style.display = 'none';
@@ -378,6 +385,7 @@ export function renderPreviewDetail(note) {
     dom.previewMarkdownBody.innerHTML = renderMarkdown(rawContent);
     applyPostMarkdownEnhancements(dom.previewMarkdownBody);
   }
+  scrollPreviewToTop();
 
   // Graph Links
   if (dom.previewGraphSection && dom.previewLinksList) {

@@ -144,3 +144,18 @@ export function highlightPositions(str, positions) {
   }
   return out;
 }
+
+/**
+ * Scrolls the preview container (and window/document) to the top immediately.
+ */
+export function scrollPreviewToTop() {
+  if (dom.previewPane) {
+    if (typeof dom.previewPane.scrollTo === 'function') {
+      dom.previewPane.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
+    dom.previewPane.scrollTop = 0;
+  }
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  if (document.documentElement) document.documentElement.scrollTop = 0;
+  if (document.body) document.body.scrollTop = 0;
+}
