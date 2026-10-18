@@ -16,51 +16,55 @@ The web interface of `kb-cli` is an embedded, client-side Single-Page Applicatio
 
 ```mermaid
 graph TD
-    App["app.js (Entrypoint & Lifecycle Orchestrator)"]
-    State["state.js (Central Reactive State Store)"]
-    DOM["dom.js (Cached DOM Element Selectors)"]
-    API["api.js (HTTP Client & Auth Interceptor)"]
-    Finder["finder.js (Fuzzy Engine, List & Preview Renderer)"]
-    Markdown["markdown.js (Markdown-it & Highlight.js)"]
-    Mermaid["mermaid.js (Mermaid Diagram Renderer)"]
-    Modal["modal.js (Create & Edit Note Modal System)"]
-    Auth["auth.js (PIN / Session Auth Flow)"]
-    PWA["pwa.js (Service Worker & Offline Sync)"]
-    Utils["utils.js (Date formatting, Debounce, Toasts)"]
+    subgraph S1["1. Entrypoint & Orchestration"]
+        App["<b>app.js</b><br/>Lifecycle Bootstrapper"]
+    end
 
-    App --> State
-    App --> DOM
-    App --> API
+    subgraph S2["2. UI Views & Feature Controllers"]
+        Finder["<b>finder.js</b><br/>Fuzzy Finder & Navigation"]
+        Docs["<b>docs.js</b><br/>Docs Tree Viewer"]
+        Modal["<b>modal.js</b><br/>Note Editor Dialogs"]
+        Auth["<b>auth.js</b><br/>Auth Gateway & PIN"]
+    end
+
+    subgraph S3["3. Content Rendering Engines"]
+        Markdown["<b>markdown.js</b><br/>GFM & Syntax Parser"]
+        MermaidEngine["<b>mermaid.js</b><br/>Pan/Zoom Viewport"]
+    end
+
+    subgraph S4["4. State & Infrastructure Services"]
+        State["<b>state.js</b><br/>Reactive State Store"]
+        API["<b>api.js</b><br/>REST Client & Sync"]
+        PWA["<b>pwa.js</b><br/>Service Worker & Offline"]
+        Foundation["<b>dom.js & utils.js</b><br/>DOM Registry & Helpers"]
+    end
+
+    %% Clear, structured hierarchy flows
     App --> Finder
-    App --> Markdown
+    App --> Docs
     App --> Modal
     App --> Auth
     App --> PWA
 
-    Finder --> State
-    Finder --> DOM
     Finder --> Markdown
-    Finder --> Mermaid
-    Finder --> API
-    Finder --> Utils
+    Docs --> Markdown
+    Markdown --> MermaidEngine
 
-    Modal --> DOM
-    Modal --> API
-    Modal --> Utils
-
-    Auth --> DOM
-    Auth --> API
-
-    PWA --> DOM
+    Finder -.-> State
+    Docs -.-> State
+    Modal -.-> API
+    Finder -.-> API
+    Docs -.-> API
 ```
 
 ### 2.1 Application Entrypoint (`app.js`)
 [server/web/js/app.js](file:///e:/kb-cli/kb-cli/server/web/js/app.js) initializes the application lifecycle:
 1. Initializes external rendering libraries (`initMarkdownLibraries()`).
-2. Registers the Service Worker (`initPWA()`) and sets up offline/online sync listeners.
-3. Binds global UI event listeners (fuzzy search input, type filter pills, tag clicks, keyboard shortcuts).
-4. Configures modal dialog listeners for note creation and editing.
-5. Verifies authentication status (`checkAuthStatus()`). If protected and unauthorized, it triggers the authentication modal; otherwise, it loads data, tags, and stats concurrently.
+2. Initializes the documentation subsystem (`initDocs()`).
+3. Registers the Service Worker (`initPWA()`) and sets up offline/online sync listeners.
+4. Binds global UI event listeners (fuzzy search input, type filter pills, tag clicks, keyboard shortcuts).
+5. Configures modal dialog listeners for note creation and editing.
+6. Verifies authentication status (`checkAuthStatus()`). If protected and unauthorized, it triggers the authentication modal; otherwise, it loads data, tags, and stats concurrently.
 
 ### 2.2 Global State Store (`state.js`)
 Maintains the centralized, mutable application state in memory:
@@ -71,9 +75,13 @@ Maintains the centralized, mutable application state in memory:
 - `activeTagFilter`: Selected tag string or `null`.
 - `searchQuery`: Current text string typed into `#search-input`.
 - `isRawView`: Boolean toggle for raw Markdown versus rendered preview.
+- `currentViewMode`: Active UI mode (`'notes'` or `'docs'`).
+- `docsTree`: Hierarchical documentation directory tree.
+- `selectedDocPath`: Path of currently selected markdown document.
+- `docsExpandedFolders`: Set of currently expanded tree folder keys.
 
 ### 2.3 DOM Reference Registry (`dom.js`)
-Caches references to frequently accessed elements (search input, results list container, preview title, preview content, filter pills, modal inputs, offline badge) to eliminate repetitive `document.getElementById` queries.
+Caches references to frequently accessed elements (search input, results list container, docs tree, nav tabs, preview title, preview content, filter pills, modal inputs, offline badge) to eliminate repetitive `document.getElementById` queries.
 
 ### 2.4 API Communication Layer (`api.js`)
 Provides typed, `fetch`-based wrappers communicating with the Go backend:
@@ -84,6 +92,8 @@ Provides typed, `fetch`-based wrappers communicating with the Go backend:
 - `deleteNote(id, reason)`: Calls `DELETE /api/notes/{id}`.
 - `getTags()`: Calls `GET /api/tags`.
 - `getStats()`: Calls `GET /api/stats`.
+- `fetchDocsTree()`: Calls `GET /api/docs` to retrieve the documentation directory tree.
+- `fetchDocContent(path)`: Calls `GET /api/docs/content?path=...` to load raw markdown content.
 - `triggerSync()`: Calls `POST /api/sync` to trigger immediate remote PostgreSQL sync.
 - `checkAuthStatus()` / `login(pin)` / `logout()`: Authentication endpoints.
 

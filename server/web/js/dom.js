@@ -34,6 +34,20 @@ export const dom = {
   previewHistoryList: document.getElementById('preview-history-list'),
   toggleHistoryBtn: document.getElementById('toggle-history-btn'),
 
+  // Navigation Mode Tabs
+  navModeTabs: document.getElementById('nav-mode-tabs'),
+  tabNotes: document.getElementById('tab-notes'),
+  tabDocs: document.getElementById('tab-docs'),
+
+  // Docs Pane Elements
+  docsPane: document.getElementById('docs-pane'),
+  docsTree: document.getElementById('docs-tree'),
+  docsSearchInput: document.getElementById('docs-search-input'),
+  docsBreadcrumb: document.getElementById('docs-breadcrumb'),
+  docsBreadcrumbPath: document.getElementById('docs-breadcrumb-path'),
+  resultsPane: document.getElementById('results-pane'),
+  filterBar: document.querySelector('.filter-bar'),
+
   // Filters & Footer
   typeFilterPills: document.getElementById('type-filter-pills'),
   tagPills: document.getElementById('tag-pills'),

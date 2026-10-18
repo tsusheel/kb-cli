@@ -153,7 +153,7 @@ sequenceDiagram
     Client->>SyncState: GetLastSyncedAt("postgres")
     SyncState-->>Client: Returns timestamp `lastSync`
 
-    rect rgb(240, 248, 255)
+    rect rgb(16, 26, 42)
         Note over Client,RemotePG: STAGE 1: PULL REMOTE DELTA (Concurrent)
         par Pull Notes
             Client->>RemotePG: SELECT notes WHERE updated_at > lastSync
@@ -171,7 +171,7 @@ sequenceDiagram
         Client->>LocalSQLite: ApplyRemotePulls(data) in single local transaction
     end
 
-    rect rgb(245, 255, 245)
+    rect rgb(16, 34, 24)
         Note over Client,RemotePG: STAGE 2: PUSH LOCAL DELTA (Batched Transaction)
         Client->>LocalSQLite: Read local records modified since `lastSync`
         Client->>RemotePG: BEGIN remote transaction

@@ -260,4 +260,38 @@ func TestServerAPIRoutes(t *testing.T) {
 	if !strings.Contains(recSync.Body.String(), "success") {
 		t.Errorf("expected success in sync response: %s", recSync.Body.String())
 	}
+
+	// 11. Test GET /api/docs (documentation tree)
+	reqDocs := httptest.NewRequest(http.MethodGet, "/api/docs", nil)
+	recDocs := httptest.NewRecorder()
+	handler.ServeHTTP(recDocs, reqDocs)
+
+	if recDocs.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /api/docs, got %d: %s", recDocs.Code, recDocs.Body.String())
+	}
+	var docsTree []map[string]interface{}
+	if err := json.Unmarshal(recDocs.Body.Bytes(), &docsTree); err != nil {
+		t.Fatalf("failed to parse docs tree JSON: %v", err)
+	}
+	if len(docsTree) != 2 {
+		t.Errorf("expected 2 folders in docs tree, got %d", len(docsTree))
+	}
+
+	// 12. Test GET /api/docs/content (doc markdown content)
+	reqDocContent := httptest.NewRequest(http.MethodGet, "/api/docs/content?path=01-system-architecture.md", nil)
+	recDocContent := httptest.NewRecorder()
+	handler.ServeHTTP(recDocContent, reqDocContent)
+
+	if recDocContent.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /api/docs/content, got %d: %s", recDocContent.Code, recDocContent.Body.String())
+	}
+	var docData map[string]interface{}
+	if err := json.Unmarshal(recDocContent.Body.Bytes(), &docData); err != nil {
+		t.Fatalf("failed to parse doc content JSON: %v", err)
+	}
+	contentStr, ok := docData["content"].(string)
+	if !ok || len(contentStr) == 0 {
+		t.Errorf("expected non-empty doc content in response")
+	}
 }
+

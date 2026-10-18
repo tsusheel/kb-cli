@@ -162,3 +162,22 @@ export async function triggerSync() {
   const res = await apiFetch('/api/sync', { method: 'POST' });
   return res.json();
 }
+
+/**
+ * Fetches the documentation directory tree.
+ */
+export async function fetchDocsTree() {
+  const res = await apiFetch('/api/docs');
+  if (!res.ok) throw new Error('Failed to load documentation tree');
+  return res.json();
+}
+
+/**
+ * Fetches the raw markdown content of a documentation file.
+ */
+export async function fetchDocContent(docPath) {
+  const res = await apiFetch(`/api/docs/content?path=${encodeURIComponent(docPath)}`);
+  if (!res.ok) throw new Error('Failed to load document content');
+  return res.json();
+}
+

@@ -47,18 +47,28 @@ export function renderMarkdown(text) {
   // Step 1: Normalize line endings
   text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-  // Step 2: Extract code blocks
+  // Step 2: Extract code blocks (supporting optional indentation e.g. inside lists or blockquotes)
   const codeBlocks = [];
-  text = text.replace(/(?:^|\n)```([a-zA-Z0-9_+-]*)\n([\s\S]*?)\n```/g, (match, lang, code) => {
+  text = text.replace(/(?:^|\n)([ \t]*)```([a-zA-Z0-9_+-]*)[ \t]*\n([\s\S]*?)\n[ \t]*```[ \t]*(?=\n|$)/g, (match, indent, lang, code) => {
+    let cleanCode = code;
+    if (indent) {
+      const indentRe = new RegExp(`^${indent}`, 'gm');
+      cleanCode = cleanCode.replace(indentRe, '');
+    }
     const id = codeBlocks.length;
-    codeBlocks.push({ lang: lang.trim(), rawCode: code, escapedCode: escapeHtml(code) });
+    codeBlocks.push({ lang: lang.trim(), rawCode: cleanCode, escapedCode: escapeHtml(cleanCode) });
     return `\n\n%%BLOCK_CODE_${id}%%\n\n`;
   });
 
   // Handle code blocks at EOF without trailing newline
-  text = text.replace(/(?:^|\n)```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```$/g, (match, lang, code) => {
+  text = text.replace(/(?:^|\n)([ \t]*)```([a-zA-Z0-9_+-]*)[ \t]*\n([\s\S]*?)\n[ \t]*```[ \t]*$/g, (match, indent, lang, code) => {
+    let cleanCode = code;
+    if (indent) {
+      const indentRe = new RegExp(`^${indent}`, 'gm');
+      cleanCode = cleanCode.replace(indentRe, '');
+    }
     const id = codeBlocks.length;
-    codeBlocks.push({ lang: lang.trim(), rawCode: code, escapedCode: escapeHtml(code) });
+    codeBlocks.push({ lang: lang.trim(), rawCode: cleanCode, escapedCode: escapeHtml(cleanCode) });
     return `\n\n%%BLOCK_CODE_${id}%%\n\n`;
   });
 
@@ -152,13 +162,21 @@ export function renderMarkdown(text) {
               </div>
             `);
           } else {
-            const langDisplay = block.lang || 'code';
+            const isBoxDrawing = /[┌┐└┘├┤┬┴┼─│═║╔╗╚╝╠╣╦╩╬━┃┏┓┗┛┣┫┳┻╋]/.test(block.rawCode) ||
+              ['box', 'ui', 'card', 'ascii', 'diagram'].includes((block.lang || '').toLowerCase());
+            const langDisplay = isBoxDrawing
+              ? (block.lang && block.lang !== 'text' ? block.lang : 'ui layout')
+              : (block.lang || 'code');
             const langClass = block.lang ? ` class="hljs language-${escapeHtml(block.lang)}"` : ' class="hljs"';
+            const wrapperClass = isBoxDrawing
+              ? 'code-block-wrapper box-drawing-wrapper'
+              : 'code-block-wrapper';
+
             out.push(`
-              <div class="code-block-wrapper">
+              <div class="${wrapperClass}">
                 <div class="code-block-header">
                   <span class="code-lang-tag">${escapeHtml(langDisplay)}</span>
-                  <button type="button" class="code-copy-btn" title="Copy Code" aria-label="Copy Code">
+                  <button type="button" class="code-copy-btn" title="Copy" aria-label="Copy">
                     <svg class="copy-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                     <svg class="check-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><polyline points="20 6 9 17 4 12"></polyline></svg>
                     <span class="copy-text">Copy</span>

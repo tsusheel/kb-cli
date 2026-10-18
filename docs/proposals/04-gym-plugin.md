@@ -26,27 +26,30 @@ The Gym parser converts quick single-line syntax into structured workout data:
 ```
 
 ### Supported Syntax Examples
-- **Standard Multi-Set:**
-  ```text
-  bench 60x10 70x8 70x7
-  ```
-  *(Parses to 3 sets of Bench Press: 60kg for 10 reps, 70kg for 8 reps, 70kg for 7 reps)*
 
-- **Repeated Sets Multiplier (`<weight>x<reps>x<sets>`):**
-  ```text
-  squat 100x5x3
-  ```
-  *(Parses to 3 identical working sets of Squat: 100kg for 5 reps each)*
+#### 1. Standard Multi-Set
+```text
+bench 60x10 70x8 70x7
+```
+*Parses to 3 sets of Bench Press: 60kg for 10 reps, 70kg for 8 reps, 70kg for 7 reps.*
 
-- **Decimal Weights & Dumbbells:**
-  ```text
-  incline db 22.5x10 22.5x8
-  ```
+#### 2. Repeated Sets Multiplier (`<weight>x<reps>x<sets>`)
+```text
+squat 100x5x3
+```
+*Parses to 3 identical working sets of Squat: 100kg for 5 reps each.*
 
-- **Bodyweight & Plus Notation:**
-  ```text
-  pullups bw+10x6 bwx8
-  ```
+#### 3. Decimal Weights & Dumbbells
+```text
+incline db 22.5x10 22.5x8
+```
+*Parses to 2 working sets of Incline Dumbbell Press: 22.5kg for 10 reps and 8 reps.*
+
+#### 4. Bodyweight & Plus Notation
+```text
+pullups bw+10x6 bwx8
+```
+*Parses to 1 weighted pull-up set (+10kg for 6 reps) and 1 bodyweight set (8 reps).*
 
 ---
 
@@ -86,7 +89,7 @@ When saved to `plugin_entries`, each exercise entry uses the universal envelope:
 
 The primary visualization is the **Single-Day View**. Users think in terms of *"What did I do today?"*, not database IDs:
 
-```text
+```ui
 ┌─────────────────────────────────────────────────────────┐
 │ ←  Prev Day          23 September 2026        Next Day →│
 │                                                         │
@@ -113,6 +116,24 @@ The primary visualization is the **Single-Day View**. Users think in terms of *"
 │ Set 3:  55.0 kg  ×   8 reps                             │
 │                                                         │
 │ Session Notes                                           │
-│ Felt strong today. Rested 2 mins between heavy sets.   │
+│ Felt strong today. Rested 2 mins between heavy sets.    │
 └─────────────────────────────────────────────────────────┘
 ```
+
+### Tabular View: Session Breakdown
+
+| Exercise | Set | Weight | Reps | Set Type / Notes |
+| :--- | :---: | :---: | :---: | :--- |
+| **1. Bench Press** | 1 | 60.0 kg | 10 | *(Warmup)* |
+| | 2 | 70.0 kg | 8 | Working Set |
+| | 3 | 70.0 kg | 7 | Working Set |
+| **2. Incline DB Press** | 1 | 22.5 kg | 10 | Working Set |
+| | 2 | 22.5 kg | 9 | Working Set |
+| | 3 | 22.5 kg | 8 | Working Set |
+| **3. Lat Pulldown** | 1 | 50.0 kg | 12 | Working Set |
+| | 2 | 55.0 kg | 10 | Working Set |
+| | 3 | 55.0 kg | 8 | Working Set |
+
+> [!NOTE]
+> **Session Notes:** Felt strong today. Rested 2 mins between heavy sets.
+

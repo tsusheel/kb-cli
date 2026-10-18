@@ -178,7 +178,7 @@ sequenceDiagram
 
     Note over SQLite: SQLite WAL Mode allows concurrent readers + 1 writer without locking
 
-    rect rgb(240, 248, 255)
+    rect rgb(18, 28, 45)
         Note over SQLite,PG: Background or Manual Sync Reconciliation
         User->>PG: kb sync -> Pull remote delta & Push local delta
         PG-->>SQLite: Harmonize & Commit updated_at watermarks

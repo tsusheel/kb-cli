@@ -24,6 +24,11 @@
   <div id="app" class="app-layout">
     <!-- Sleek Minimal Header -->
     <header class="app-header">
+      <div class="nav-mode-tabs" id="nav-mode-tabs">
+        <button class="nav-tab active" id="tab-notes" data-mode="notes" title="Notes & Tasks">Notes</button>
+        <button class="nav-tab" id="tab-docs" data-mode="docs" title="System Documentation">Docs</button>
+      </div>
+
       <div class="search-container">
         <div class="search-input-wrapper">
           <input 
@@ -66,6 +71,27 @@
 
     <!-- Main Dual-Pane View -->
     <main class="main-split-container">
+      <!-- Left: Docs Directory Tree (Visible in Docs Mode) -->
+      <section class="docs-pane" id="docs-pane" style="display: none;">
+        <div class="docs-pane-header">
+          <div class="docs-pane-title">
+            <span>Documentation Tree</span>
+          </div>
+          <div class="docs-search-wrapper">
+            <input 
+              type="text" 
+              id="docs-search-input" 
+              placeholder="Filter docs..." 
+              autocomplete="off" 
+              spellcheck="false"
+            >
+          </div>
+        </div>
+        <div class="docs-tree-container" id="docs-tree" tabindex="0">
+          <div class="loading-state">Loading documentation...</div>
+        </div>
+      </section>
+
       <!-- Left: Fuzzy Results List -->
       <section class="results-pane" id="results-pane">
         <div class="results-list" id="results-list" tabindex="0">
@@ -84,6 +110,10 @@
           <div class="preview-header">
             <div class="preview-nav-bar mobile-only">
               <button id="mobile-back-btn" class="btn btn-sm btn-secondary mobile-back-btn" title="Back to List">← Back to List</button>
+            </div>
+            <!-- Documentation Breadcrumb (Visible in Docs Mode) -->
+            <div id="docs-breadcrumb" class="docs-breadcrumb" style="display: none;">
+              <span id="docs-breadcrumb-path"></span>
             </div>
             <div class="preview-title-row">
               <h1 id="preview-title" class="preview-title"></h1>

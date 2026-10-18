@@ -12,4 +12,12 @@ export const state = {
   isRawView: false,
   isAuthenticated: false,
   isAuthRequired: false,
+
+  // Documentation Mode State
+  currentViewMode: 'notes', // 'notes' or 'docs'
+  docsTree: [],
+  selectedDocPath: null,
+  currentDocContent: null,
+  docsExpandedFolders: new Set(['docs', 'proposals']),
 };
+

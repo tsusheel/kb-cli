@@ -19,7 +19,7 @@ The user never deals with an ordinary phone keyboard. The application controls t
 
 The viewport is divided horizontally into two equal halves:
 
-```text
+```ui
 ┌─────────────────────────────────────────────────────────┐
 │ UPPER 50%: COMMAND STATE & PREDICTIVE OUTPUT            │
 │                                                         │

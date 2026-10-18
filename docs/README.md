@@ -15,6 +15,7 @@ This directory contains the authoritative architecture documentation and technic
 | [**05. PostgreSQL Sync Engine**](./05-postgres-sync-engine.md) | **Cloud Sync** | Incremental timestamp-watermark synchronization (`updated_at > last_synced_at`), soft-delete replication, and conflict handling. |
 | [**06. Model Context Protocol Server**](./06-mcp-server.md) | **AI Agent Connectivity** | Native MCP server implementation over `stdio` providing 12 tools for autonomous agent interaction with audit logging. |
 | [**07. Configuration & Security**](./07-configuration-and-security.md) | **Config & Secrets** | Viper configuration (`config.yaml`), path resolution, and hardware-encrypted OS Keyring password management. |
+| [**08. Audit & Revision History**](./08-audit-and-revision-history.md) | **Audit & Time Travel** | Immutable snapshot logs, automated diff engine, atomic rollback/reversion, and AI attribution trail. |
 
 ---
 

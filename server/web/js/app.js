@@ -10,6 +10,7 @@ import { showAuthModal, setupAuthListeners } from './auth.js';
 import { initMarkdownLibraries } from './markdown.js';
 import { initPWA, handlePWAUrlAction } from './pwa.js';
 import { setupModalListeners } from './modal.js';
+import { initDocs } from './docs.js';
 import {
   setupFinderListeners,
   loadData,
@@ -21,6 +22,9 @@ import {
 async function init() {
   // 1. External UI libraries
   initMarkdownLibraries();
+
+  // 2. Documentation subsystem
+  initDocs();
 
   // 2. Service Worker & Offline PWA sync
   initPWA({

@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tsusheel/kb-cli/db"
+	"github.com/tsusheel/kb-cli/docs"
 	"github.com/tsusheel/kb-cli/models"
 	"github.com/tsusheel/kb-cli/sync"
 	"github.com/tsusheel/kb-cli/utils"
@@ -38,6 +39,10 @@ func RegisterRoutes() http.Handler {
 	mux.HandleFunc("/api/stats", requireAuth(handleGetStats))
 	mux.HandleFunc("/api/tags", requireAuth(handleGetTags))
 	mux.HandleFunc("/api/sync", requireAuth(handleSync))
+
+	// Documentation Routes (publicly accessible)
+	mux.HandleFunc("/api/docs", handleGetDocsTree)
+	mux.HandleFunc("/api/docs/content", handleGetDocContent)
 
 	// Static Web Assets
 	webFS, err := fs.Sub(embeddedFiles, "web")
@@ -639,3 +644,37 @@ func handleSync(w http.ResponseWriter, r *http.Request) {
 		"message": fmt.Sprintf("Synced: %d pushed, %d pulled (%s)", stats.NotesPushed+stats.LogsPushed, stats.NotesPulled+stats.LogsPulled, stats.Duration.Round(time.Millisecond)),
 	})
 }
+
+func handleGetDocsTree(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	tree, err := docs.GetDocsTree()
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get docs tree: %v", err))
+		return
+	}
+	jsonResponse(w, http.StatusOK, tree)
+}
+
+func handleGetDocContent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	docPath := r.URL.Query().Get("path")
+	if docPath == "" {
+		docPath = "README.md"
+	}
+	content, err := docs.ReadDocFile(docPath)
+	if err != nil {
+		jsonError(w, http.StatusNotFound, fmt.Sprintf("doc not found: %v", err))
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"path":    docPath,
+		"content": content,
+	})
+}
+
