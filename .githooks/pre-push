@@ -1,0 +1,46 @@
+#!/bin/sh
+
+# KB-CLI Pre-Push Hook: Automatic Web Bundle Verification
+# Only triggers when pushing commits to the 'main' branch.
+
+remote="$1"
+url="$2"
+
+is_pushing_main=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Ignore branch deletions (local sha 00000...)
+  if [ "$remote_ref" = "refs/heads/main" ] && [ "$local_sha" != "0000000000000000000000000000000000000000" ] && [ "$local_ref" != "(delete)" ]; then
+    is_pushing_main=1
+    break
+  fi
+done
+
+if [ "$is_pushing_main" -eq 1 ]; then
+  echo "==> [pre-push] Push to 'main' branch detected."
+  echo "==> [pre-push] Running 'npm run build' to verify web bundle..."
+  
+  npm run build
+
+  # Stage any dist changes
+  git add server/web/dist/
+
+  # Check if staged changes actually exist in server/web/dist
+  if ! git diff --cached --quiet -- server/web/dist/; then
+    echo ""
+    echo "⚠️  [pre-push] Web bundle in 'server/web/dist/' was out-of-sync with source files!"
+    echo "==> [pre-push] Automatically committing updated bundle..."
+    
+    git commit -m "build: update web bundle"
+    
+    echo "✅ [pre-push] Committed updated bundle as $(git rev-parse --short HEAD)."
+    echo "==> [pre-push] Push halted because a new commit was created."
+    echo "==> [pre-push] Please run 'git push' again to push your changes together with the new bundle commit."
+    echo ""
+    exit 1
+  else
+    echo "==> [pre-push] Web bundle is up-to-date. Proceeding with push."
+  fi
+fi
+
+exit 0

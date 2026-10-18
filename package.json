@@ -7,6 +7,7 @@
     "build:js": "npx --yes esbuild server/web/js/app.js --bundle --minify --format=esm --outfile=server/web/dist/app.min.js",
     "build:css": "npx --yes esbuild server/web/style.css --minify --outfile=server/web/dist/style.min.css",
     "build": "npm run build:js && npm run build:css",
+    "prepare": "git config core.hooksPath .githooks || true",
     "watch:js": "npx --yes esbuild server/web/js/app.js --bundle --format=esm --outfile=server/web/dist/app.min.js --watch",
     "watch:css": "npx --yes esbuild server/web/style.css --outfile=server/web/dist/style.min.css --watch",
     "watch": "npx --yes concurrently \"npm:watch:js\" \"npm:watch:css\""

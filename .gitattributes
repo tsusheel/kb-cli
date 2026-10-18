@@ -1,0 +1,6 @@
+# Ensure git hooks and shell scripts always maintain LF line endings across all platforms
+.githooks/* text eol=lf
+*.sh text eol=lf
+
+# Keep web build artifacts LF-consistent across platforms
+server/web/dist/** text eol=lf
