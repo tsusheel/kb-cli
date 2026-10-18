@@ -882,12 +882,15 @@ html, body {
   border-bottom: 1px solid var(--border-color);
   user-select: none;
   gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .mermaid-header-left {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .mermaid-tag {
@@ -898,6 +901,7 @@ html, body {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .zoom-level-badge {
@@ -908,12 +912,15 @@ html, body {
   padding: 1px 6px;
   border-radius: var(--radius-sm);
   letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
 .mermaid-header-actions {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .diagram-btn {
@@ -1620,6 +1627,83 @@ html, body {
     left: 20px;
     right: 20px;
     text-align: center;
+  }
+
+  /* Mobile Mermaid Diagram Clean Layout */
+  .mermaid-block-wrapper {
+    margin: 12px 0;
+    border-radius: var(--radius-sm);
+  }
+
+  .mermaid-block-header {
+    padding: 4px 8px;
+    gap: 4px;
+    height: 34px;
+    flex-wrap: nowrap;
+  }
+
+  .mermaid-header-left {
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .mermaid-tag {
+    font-size: 10px;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .mermaid-tag svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  .mermaid-tag-prefix {
+    display: none;
+  }
+
+  .zoom-level-badge {
+    font-size: 9px;
+    padding: 1px 4px;
+    white-space: nowrap;
+  }
+
+  .mermaid-header-actions {
+    gap: 2px;
+    white-space: nowrap;
+  }
+
+  .diagram-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+  }
+
+  .diagram-btn svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  .mermaid-header-actions .code-copy-btn {
+    height: 24px;
+    padding: 0 6px;
+  }
+
+  .mermaid-header-actions .code-copy-btn .copy-text {
+    display: none;
+  }
+
+  .mermaid-viewport {
+    height: 260px;
+    min-height: 180px;
+    max-height: 50vh;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .mermaid-block-wrapper.mermaid-fullscreen .mermaid-viewport {
+    height: 100% !important;
+    max-height: none !important;
+    touch-action: none !important;
   }
 }
 

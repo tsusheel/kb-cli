@@ -96,14 +96,14 @@ export function setupMermaidPanZoom(wrapper) {
   function clampPan() {
     const vRect = viewport.getBoundingClientRect();
     if (vRect.width <= 0 || vRect.height <= 0) return;
-    const margin = 50;
+    const margin = 20;
     const diagramW = origW * scale;
     const diagramH = origH * scale;
 
-    const minTx = margin - (minX * scale + diagramW);
-    const maxTx = vRect.width - margin - minX * scale;
-    const minTy = margin - (minY * scale + diagramH);
-    const maxTy = vRect.height - margin - minY * scale;
+    const minTx = Math.min(margin - (minX * scale + diagramW), (vRect.width - origW * scale) / 2 - minX * scale);
+    const maxTx = Math.max(vRect.width - margin - minX * scale, (vRect.width - origW * scale) / 2 - minX * scale);
+    const minTy = Math.min(margin - (minY * scale + diagramH), (vRect.height - origH * scale) / 2 - minY * scale);
+    const maxTy = Math.max(vRect.height - margin - minY * scale, (vRect.height - origH * scale) / 2 - minY * scale);
 
     if (minTx <= maxTx) {
       tx = Math.min(Math.max(tx, minTx), maxTx);
@@ -117,16 +117,27 @@ export function setupMermaidPanZoom(wrapper) {
     const vRect = viewport.getBoundingClientRect();
     if (vRect.width <= 0 || vRect.height <= 0) return;
 
-    const availW = Math.max(vRect.width - 60, 100);
-    const availH = Math.max(vRect.height - 60, 100);
+    const isMobile = window.innerWidth <= 768;
+    const isFs = wrapper.classList.contains('mermaid-fullscreen');
+
+    const availW = Math.max(vRect.width - (isMobile ? 24 : 60), 100);
+    const availH = Math.max(vRect.height - (isMobile ? 24 : 60), 100);
 
     const ratioW = availW / origW;
     const ratioH = availH / origH;
-    const fitScale = Math.min(ratioW, ratioH, 1.0);
+    let fitScale = Math.min(ratioW, ratioH, 1.0);
 
-    scale = Math.min(Math.max(fitScale, MIN_SCALE), 1.0);
-    tx = (vRect.width - origW * scale) / 2 - minX * scale;
-    ty = (vRect.height - origH * scale) / 2 - minY * scale;
+    // On mobile inline view, prevent extreme shrinking (< 0.45) so diagrams remain clear & readable
+    if (isMobile && !isFs && fitScale < 0.45) {
+      fitScale = 0.45;
+      scale = fitScale;
+      tx = 12 - minX * scale;
+      ty = Math.max((vRect.height - origH * scale) / 2 - minY * scale, 12 - minY * scale);
+    } else {
+      scale = Math.min(Math.max(fitScale, MIN_SCALE), 1.0);
+      tx = (vRect.width - origW * scale) / 2 - minX * scale;
+      ty = (vRect.height - origH * scale) / 2 - minY * scale;
+    }
 
     clampPan();
     applyTransform(smooth);
@@ -163,9 +174,13 @@ export function setupMermaidPanZoom(wrapper) {
     zoomTowards(scale * zoomFactor, cursorX, cursorY, false);
   }, { passive: false });
 
-  // Pointer-based Panning (Mouse & Single Touch via Pointer Events)
+  // Pointer-based Panning (Mouse & Touch via Pointer Events)
   viewport.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
+    // On touch screens in non-fullscreen mode, don't capture single-finger touch so user can scroll page smoothly!
+    if (e.pointerType === 'touch' && !wrapper.classList.contains('mermaid-fullscreen')) {
+      return;
+    }
     isDragging = true;
     startX = e.clientX - tx;
     startY = e.clientY - ty;
