@@ -1,488 +1,151 @@
 # Knowledge Base CLI (`kb`)
 
-A lightning-fast, local-first personal knowledge base and second brain CLI with embedded SQLite storage, remote **PostgreSQL** synchronization, and built-in **Model Context Protocol (MCP)** server connectivity for AI agents.
-
-Designed around a **two-speed capture philosophy**: capture fleeting thoughts in milliseconds directly from your terminal, flesh them out into deep markdown notes in your favorite editor, sync securely across machines via PostgreSQL, and seamlessly collaborate with AI assistants over MCP.
+A fast, local-first personal knowledge base and second-brain application with embedded SQLite storage, remote PostgreSQL synchronization, an embedded Web Fuzzy Finder (PWA), and native Model Context Protocol (MCP) server connectivity for AI agents.
 
 ---
 
-## Features
+## Documentation
 
-- **⚡ Two-Speed Thought Capture**:
-  - **Instant Jot**: Fast `< 50ms` capture directly from the terminal without opening an editor (`kb "thought"`, `kb jot "idea"`).
-  - **Deep Fleshing**: Dedicated editor workflow (`$EDITOR`) to craft rich markdown bodies (`kb add`, `kb edit <id>`).
-- **🔄 Local-First PostgreSQL Sync (`kb sync`)**:
-  - Keep 100% offline capability and sub-millisecond local SQLite speed.
-  - Synchronize notes, tags, links, and daily logs with any PostgreSQL database (local, self-hosted, or cloud PostgreSQL).
-- **🔐 Hardware/OS Encrypted Secrets**:
-  - Passwords and connection secrets are **never stored in plaintext config files**.
-  - Encrypted directly in your OS Credential Manager (Windows Credential Manager / macOS Keychain / Linux Secret Service) with masked terminal entry.
-- **📅 Daily Temporal Stream**: Micro-log throughout the day (`kb log "..."`, `kb today`) and promote impactful logs into permanent notes (`kb promote <id>`).
-- **📥 Inbox & Triage Wizard**: Capture chaotically in a `raw` state, then rapidly triage, refine, tag, or link notes (`kb inbox`, `kb triage`).
-- **🔍 Full-Text Search (FTS5)**: Instant search across note headlines and detailed markdown content bodies (`kb search "query"`).
-- **🕸️ Relational Graph & Pure Markdown**: Prose stays pure and uncluttered (no `#tag` or `[[bracket]]` markup pollution); tags and semantic links live in the relational database layer.
-- **🛡️ Audit Trail & Soft Deletion**: Non-destructive soft deletes with timestamps and attribution (e.g., `deleted by AI`).
-- **🤖 Built-in MCP Server**: Native stdio MCP server (`kb serve`) allowing AI assistants (Claude Desktop, Antigravity, Cursor, Cline) to read, search, create, and manage your notes.
+All architectural details, command references, database schemas, and guides are thoroughly documented in the [**docs/**](docs/README.md) directory:
+
+- [**01. System Architecture**](docs/01-system-architecture.md): Runtime lifecycle, concurrency, and subsystem topology.
+- [**02. Database Schema & Models**](docs/02-database-schema.md): Complete SQLite & PostgreSQL schemas, indexes, and Go models.
+- [**03. CLI Command Reference**](docs/03-cli-commands.md): Complete usage guide for all 27 CLI commands and workflows.
+- [**04. Embedded Web Fuzzy Finder**](docs/04-web-fuzzy-finder.md): Dual-pane interface, Markdown/Mermaid engine, and PWA offline setup.
+- [**05. PostgreSQL Sync Engine**](docs/05-postgres-sync-engine.md): Incremental watermark sync, conflict resolution, and DDL.
+- [**06. MCP Server**](docs/06-mcp-server.md): Stdio Model Context Protocol integration (all 22 tools, resources, and prompts).
+- [**07. Configuration & Security**](docs/07-configuration-and-security.md): `config.yaml` reference, OS Keyring secrets, and TLS.
+- [**Future Extension Proposals**](docs/proposals/README.md): Upcoming Plugin System, ThingsPad Console, and Gym Logging specs.
 
 ---
 
-## Installation & Distribution
+## Installation & Setup
 
-### 1. Quick Install (All Linux Distributions & macOS)
+### 1. Automated Install (Linux & macOS)
 
 Run the automated installer script:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tsusheel/kb-cli/main/install.sh | bash
 ```
 
+---
+
 ### 2. Native Package Managers
 
-* **Ubuntu / Debian / Linux Mint / Pop!_OS (`apt`)**:
-  Via Cloudflare R2 APT Repository:
-  ```bash
-  # 1. Add GPG Key
-  curl -fsSL https://apt.tsusheel.com/KEY.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/kb.gpg > /dev/null
+#### Ubuntu / Debian / Linux Mint / Pop!_OS (`apt`)
+Via Cloudflare R2 APT Repository:
+```bash
+# 1. Add GPG Key
+curl -fsSL https://apt.tsusheel.com/KEY.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/kb.gpg > /dev/null
 
-  # 2. Add Repository
-  echo "deb [signed-by=/etc/apt/keyrings/kb.gpg] https://apt.tsusheel.com stable main" | sudo tee /etc/apt/sources.list.d/kb.list
+# 2. Add Repository
+echo "deb [signed-by=/etc/apt/keyrings/kb.gpg] https://apt.tsusheel.com stable main" | sudo tee /etc/apt/sources.list.d/kb.list
 
-  # 3. Install & auto-update
-  sudo apt update && sudo apt install kb
-  ```
+# 3. Install & auto-update
+sudo apt update && sudo apt install kb
+```
 
-* **Fedora / RHEL / CentOS / Amazon Linux / Rocky (`dnf`)**:
-  Via **Fedora COPR**:
-  ```bash
-  sudo dnf copr enable tsusheel/kb-cli
-  sudo dnf install kb
-  ```
+#### Fedora / RHEL / CentOS / Rocky (`dnf`)
+Via Fedora COPR:
+```bash
+sudo dnf copr enable tsusheel/kb-cli
+sudo dnf install kb
+```
 
-* **Nix / NixOS (`nix`)**:
-  Run instantly without installing:
-  ```bash
-  nix run github:tsusheel/kb-cli
-  ```
-  Install permanently into your Nix profile:
-  ```bash
-  nix profile install github:tsusheel/kb-cli
-  ```
+#### Nix / NixOS (`nix`)
+Run instantly without installing:
+```bash
+nix run github:tsusheel/kb-cli
+```
+Or install into your Nix profile:
+```bash
+nix profile install github:tsusheel/kb-cli
+```
+
+---
 
 ### 3. Build from Source
 
 #### Prerequisites
 - **Go 1.21+** installed ([Download Go](https://go.dev/dl/))
-- **CGO is NOT required** (uses pure-Go drivers `modernc.org/sqlite` and `pgx/v5`)
+- **Node.js & npm** (optional, only required if modifying web frontend assets in `server/web/`)
 
+#### Build Steps
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/tsusheel/kb-cli.git
 cd kb-cli
 
-# Build binary
+# 2. (Optional) Rebuild web assets if edited
+npm install
+npm run build
+
+# 3. Build the binary
 go build -o kb .
 
-# (Optional) Install globally to $GOPATH/bin
+# 4. (Optional) Install globally to $GOPATH/bin
 go install .
 ```
 
-On Windows:
+On Windows (PowerShell):
 ```powershell
 go build -o kb.exe .
 ```
 
-### 2. Verify Installation
-
-```bash
-./kb --help
-```
-
-### 3. Enable Shell Tab Auto-Completion (Optional but Recommended)
-
-`kb` supports intelligent tab auto-completion for commands, flags, note types, and dynamic note IDs:
-
-* **PowerShell (Windows)**:
-  ```powershell
-  # For current session:
-  kb completion powershell | Out-String | Invoke-Expression
-
-  # Or permanently add to your PowerShell profile:
-  Add-Content $PROFILE "`nInvoke-Expression (&kb completion powershell | Out-String)"
-  ```
-
-* **Bash (Linux/macOS)**:
-  ```bash
-  # In your ~/.bashrc:
-  source <(kb completion bash)
-  ```
-
-* **Zsh (macOS)**:
-  ```zsh
-  # In your ~/.zshrc:
-  source <(kb completion zsh)
-  ```
-
 ---
 
-## Configuration & Secrets Management
+### 4. Verification & Initial Run
 
-`kb` works out-of-the-box with **zero manual configuration required**. 
-
-On first run, `kb` automatically initializes `~/.config/kb/config.yaml` and `~/.config/kb/kb.db`.
-
-### CLI Configuration Commands (`kb config`)
-
-Manage configurations directly from the terminal without editing files manually:
+`kb` works out of the box with zero manual configuration. On first run, it automatically initializes its local database directory at `~/.config/kb/`:
 
 ```bash
-# Set a public configuration value
-kb config set date_format "2006-01-02"
-kb config set remote.postgres_url "postgres://username@localhost:5432/dbname?sslmode=disable"
+# Verify installation
+kb --help
 
-# Securely save a secret / password in the OS Credential Manager (input is hidden)
-kb config set-secret postgres_password
+# Capture your first note
+kb "My first captured note in kb"
 
-# View settings
-kb config get date_format
-kb config list
-```
-
-### 🔒 Security Guarantee: Zero Plaintext Secrets
-
-- Passwords stored via `kb config set-secret` are encrypted natively by your Operating System:
-  - **Windows**: Windows Credential Manager / DPAPI
-  - **macOS**: Apple Keychain
-  - **Linux**: Secret Service (GNOME Keyring / KWallet)
-- `config.yaml` only contains non-sensitive settings (database URL without password).
-- Environment variables (e.g., `KB_POSTGRES_PASSWORD`, `KB_POSTGRES_URL`, `DATABASE_URL`) are automatically supported as overrides for CI/CD or headless environments.
-
----
-
-## Remote PostgreSQL Synchronization
-
-`kb` uses a **Local-First + Remote Sync** architecture: your daily CLI operations are always lightning-fast on local SQLite, and you can sync with remote PostgreSQL whenever you want.
-
-### 1. Configure in `kb-cli`
-
-Run the interactive setup wizard:
-
-```bash
-kb config setup
-```
-
-The wizard will:
-1. Prompt for your **PostgreSQL Connection URL** (e.g. `postgres://username@localhost:5432/dbname?sslmode=disable`).
-2. Prompt for your **PostgreSQL Password** (hidden masked input, saved to OS Keyring).
-3. Automatically verify connectivity and initialize the remote tables.
-
-*(Optional)* If you prefer to manually run the PostgreSQL schema, you can find it in [`postgres/schema.sql`](postgres/schema.sql).
-
-### 2. Synchronizing Notes
-
-```bash
-# Two-way sync (push local modifications + pull remote modifications)
-kb sync
-
-# Push only local changes
-kb sync push
-
-# Pull only remote changes
-kb sync pull
-
-# Check sync status and pending changes
-kb sync status
-
-# Test connection to PostgreSQL
-kb sync test
-```
-
----
-
-## Quickstart & CLI Usage
-
-### 1. Capturing Thoughts (`kb [thought]` / `kb add`)
-
-```bash
-# Rapid 1-line positional capture (no command needed)
-kb "Explore SQLite WAL mode performance"
-
-# Fast add with flags
-kb add "Implement Raft log compaction" --type todo --due "tomorrow" --area work
-kb add "Graph neural networks for note recommendation" --type idea
-
-# Add note with editor ($EDITOR) for detailed body/flesh
-kb add "API Gateway Architecture" -e --type project --area work --tags "backend,arch"
-kb add
-```
-
-### 2. Viewing, Browsing & Searching Notes (`kb ls [query]`)
-
-```bash
-# List all notes in a rounded table
+# View note in terminal
 kb ls
-kb ls --todos      # Only todos
-kb ls --projects   # Only projects
-kb ls -t idea      # Filter by type
-
-# Search keywords across note titles and bodies
-kb ls "distributed caching"
-kb ls postgres
-kb ls -t todo "migration"
-
-# Open / view note or daily log details (fuzzy-finds across all notes and logs if ID is omitted)
-kb open
-kb open a1b2c3d
-kb open 6fb3bab
-
-# Interactive fuzzy-select and edit menu (title, body, type, status, area, due date, tags, links):
-kb edit
-
-# Interactive edit for a specific note or daily log:
-kb edit a1b2c3d
-
-# Rename / edit note title directly:
-kb edit a1b2c3d "Updated Note Title"
-kb rename a1b2c3d "Updated Note Title"
-kb edit a1b2c3d -n "Updated Note Title" --status in-progress --type project
-
-# Open $EDITOR directly to write or update note flesh (body):
-kb edit a1b2c3d -e
-kb flesh a1b2c3d
 ```
-
-### 3. Deleting Notes & Logs (`kb delete` / `kb rm`)
-
-All deletions are safe, non-destructive soft deletes with timestamps and attribution:
-
-```bash
-# Delete a note by ID
-kb delete a1b2c3d
-kb rm a1b2c3d
-
-# Delete with custom attribution reason
-kb rm a1b2c3d --reason "superseded by new architecture"
-
-# Interactive fuzzy selection (if ID is omitted)
-kb delete
-
-# Delete a daily log
-kb delete 6a178a8
-kb rm 6a178a8
-```
-
-### 4. Daily Logging & Stream (`kb log`)
-
-```bash
-# Append a micro-log to today's stream
-kb log "Finished reviewing PR for MCP protocol"
-kb log "Benchmarked query latency: 1.2ms average"
-
-# View today's unpromoted logs
-kb log
-
-# View all of today's logs (including promoted ones)
-kb log -a
-
-# View logs for a specific date
-kb log -d 2026-09-12
-kb log -d yesterday -a
-
-# View logs for an inclusive date range
-kb log --from 2026-09-01 --to 2026-09-13
-kb log -f -7d -a
-
-# View all historical logs across all time
-kb log -A
-kb log --all-time -a
-
-# Promote a micro-log entry to a permanent Note
-kb promote 08db3db --type project
-```
-
-### 5. Inbox & Triage (`kb inbox` / `kb triage`)
-
-```bash
-# View today's raw unrefined notes awaiting triage
-kb inbox
-
-# View all raw notes across all dates
-kb inbox -a
-
-# Launch interactive terminal triage wizard for today's raw notes
-kb triage
-
-# Triage all raw notes across all dates
-kb triage -a
-```
-
-### 6. Audit & Version History (`kb history` / `kb audit`)
-
-```bash
-# View recent global activity stream
-kb history
-kb audit
-
-# View version timeline for a note or log
-kb history a1b2c3d
-
-# Inspect snapshot diff for a specific revision
-kb history diff a1b2c3d 9f8e7d6
-
-# Revert a note to a previous revision
-kb history revert a1b2c3d 9f8e7d6
-```
-
-### 7. Linking Notes & Knowledge Graph (`kb link`, `kb graph`, `kb backlinks`, `kb orphans`)
-
-```bash
-# Create semantic relationships between notes
-kb link <from_id> <to_id> --type related_to
-kb link <from_id> <to_id> --type depends_on
-
-# View incoming backlinks pointing to a note
-kb backlinks a1b2c3d
-kb bl a1b2c3d
-
-# Visualize connected graph tree for a note (or interactive fuzzy-select)
-kb graph a1b2c3d
-kb graph
-
-# Find orphan notes with no tags and no links
-kb orphans
-```
-
-### 8. Analytics Dashboard & Streaks (`kb stats`)
-
-```bash
-# View high-level metrics, activity streaks, type/status distributions, and hub notes
-kb stats
-kb summary
-```
-
-### 9. Export & Import (`kb export`, `kb import`)
-
-```bash
-# Export notes to Markdown files with Obsidian/Logseq YAML frontmatter (default to ./kb-export):
-kb export
-kb export --dir ./my-obsidian-vault
-
-# Export as full JSON dump:
-kb export --format json --dir ./backups
-
-# Batch import Markdown files from a folder (auto-extracts YAML frontmatter and titles):
-kb import --dir ./notes-folder
-```
-
-### 10. Configuration, Profiles & Secrets (`kb config`)
-
-```bash
-# Set a public configuration value
-kb config set date_format "2006-01-02"
-
-# View all configuration settings and OS Keyring secret statuses
-kb config list
-kb config get remote.postgres_url
-
-# Delete configuration settings or OS Keyring secrets
-kb config delete test_key
-kb config rm remote.enabled
-kb config delete --secret postgres_password
-
-# Run with a custom configuration profile (e.g. separate work & personal knowledge bases):
-kb --config ~/.config/kb-work/config.yaml ls
-KB_CONFIG=~/.config/kb-work/config.yaml kb stats
-```
-
-### 11. Interactive Web Fuzzy Finder & Progressive Web App (`kb serve http`)
-
-Launch the embedded dual-pane web fuzzy finder and live preview interface with offline Progressive Web App (PWA) support:
-
-```bash
-# Start on default port 8080
-kb serve http
-
-# Open in your default browser automatically
-kb serve http -o
-
-# Custom port and binding
-kb serve http --port 3000 --host 0.0.0.0
-
-# Enable HTTPS for remote/mobile PWA installation over local network
-kb serve http --tls-cert cert.pem --tls-key key.pem
-```
-
-- **Installable PWA**: Install directly from the browser as a standalone desktop or mobile app (Chrome, Edge, Safari, Firefox).
-- **Offline Mode**: Precaches the app shell and caches read-only queries (`/api/items`, `/api/tags`, `/api/stats`) so you can search and browse notes even when disconnected.
-- **Keyboard Shortcuts**: Built-in fast navigation (`/` search, `↑`/`↓` navigate, `N` new note, `V` toggle raw markdown, `E` edit, `Esc` clear).
 
 ---
 
-## Connecting AI Agents (MCP Server)
+### 5. Shell Tab Auto-Completion (Recommended)
 
-`kb` includes a native Model Context Protocol (MCP) server. Run `kb serve` (or `kb mcp`) over standard input/output (stdio) to connect AI agents.
+Enable tab auto-completion for commands, flags, note types, and dynamic note IDs:
 
-### Claude Desktop Configuration
+#### PowerShell (Windows)
+```powershell
+# In your current session:
+kb completion powershell | Out-String | Invoke-Expression
 
-Add the following to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "kb": {
-      "command": "/path/to/kb",
-      "args": ["serve"]
-    }
-  }
-}
+# Or add permanently to your profile:
+Add-Content $PROFILE "`nInvoke-Expression (&kb completion powershell | Out-String)"
 ```
 
-On Windows:
-```json
-{
-  "mcpServers": {
-    "kb": {
-      "command": "E:\\kb-cli\\kb-cli\\kb.exe",
-      "args": ["serve"]
-    }
-  }
-}
+#### Bash (Linux/macOS)
+```bash
+# In your ~/.bashrc:
+source <(kb completion bash)
 ```
 
-### Available MCP Tools
+#### Zsh (macOS/Linux)
+```zsh
+# In your ~/.zshrc:
+source <(kb completion zsh)
+```
 
-AI assistants will have access to:
-- `list_notes`: Filter notes by type, status, or area.
-- `get_note`: Fetch full note body, metadata, tags, and links.
-- `search_notes`: Run full-text searches across all notes.
-- `create_note`: Create new notes, tasks, or projects.
-- `update_note`: Update titles, bodies, types, statuses, and due dates.
-- `delete_note`: Soft-delete notes with attribution reasons.
-- `restore_note`: Restore soft-deleted notes back to active state.
-- `add_tag`: Associate tags with notes.
-- `remove_tag`: Remove tags from notes.
-- `link_notes`: Create directed semantic relationships between notes.
-- `unlink_notes`: Remove or soft-delete relationships between notes.
-- `get_daily_logs`: Retrieve daily logs for any date.
-- `create_daily_log`: Append micro-logs to the temporal stream.
-- `promote_daily_log`: Convert logs to permanent notes.
-- `restore_log`: Restore soft-deleted daily logs.
-- `get_inbox`: Fetch unrefined notes and unpromoted logs for triage.
-- `get_history`: Retrieve audit revision timeline and diff snapshots.
-- `revert_note`: Restore a note to a previous point-in-time snapshot.
-
-### Available MCP Resources & Prompts
-
-- **Resources:**
-  - `kb://today`: Real-time daily log stream recorded today.
-  - `kb://inbox`: Raw unrefined notes and unpromoted daily logs awaiting triage.
-- **Prompts:**
-  - `triage-inbox`: Standard prompt to review raw notes and propose types/tags.
-  - `daily-summary`: Prompt to synthesize today's logs into an executive summary.
+#### Fish
+```fish
+kb completion fish | source
+```
 
 ---
 
-## Running Tests
+### 6. Running Tests
 
-Run the full test suite across database, sync engine, OS secrets, MCP server, and utility packages:
+Run the full test suite across the database, PostgreSQL sync engine, OS secrets, MCP server, and CLI commands:
 
 ```bash
 go test -v ./...
