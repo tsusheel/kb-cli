@@ -8,7 +8,7 @@ import { state } from './state.js';
 import { dom } from './dom.js';
 import { fetchDocsTree, fetchDocContent } from './api.js';
 import { renderMarkdown, applyPostMarkdownEnhancements } from './markdown.js';
-import { showMobileDetail, showMobileList, updateViewModeDisplay } from './finder.js';
+import { showMobileDetail, showMobileList, updateViewModeDisplay, resetMobileSearch, filterAndRender } from './finder.js';
 import { escapeHtml, scrollPreviewToTop } from './utils.js';
 
 let isDocsInitialized = false;
@@ -88,6 +88,16 @@ export async function switchViewMode(mode, targetDocPath = null) {
 
   const isDocs = mode === 'docs';
 
+  // Reset search state across both desktop and mobile
+  resetMobileSearch();
+  if (dom.searchInput) {
+    dom.searchInput.value = '';
+    if (dom.clearSearchBtn) dom.clearSearchBtn.style.display = 'none';
+  }
+  if (dom.docsSearchInput) {
+    dom.docsSearchInput.value = '';
+  }
+
   // Toggle navigation tab active states
   if (dom.tabNotes) dom.tabNotes.classList.toggle('active', !isDocs);
   if (dom.tabDocs) dom.tabDocs.classList.toggle('active', isDocs);
@@ -120,7 +130,7 @@ export async function switchViewMode(mode, targetDocPath = null) {
     if (!state.docsTree || state.docsTree.length === 0) {
       await loadDocsTree();
     } else {
-      renderDocsTree(dom.docsSearchInput?.value || '');
+      renderDocsTree('');
     }
 
     // Determine document to display
@@ -139,6 +149,7 @@ export async function switchViewMode(mode, targetDocPath = null) {
     // Return mobile view to list if applicable
     showMobileList();
     scrollPreviewToTop();
+    filterAndRender();
   }
 }
 

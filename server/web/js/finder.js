@@ -509,7 +509,7 @@ export function handleGlobalKeydown(e) {
         }
       }
       dom.appContainer.classList.remove('mobile-search-open');
-      if (dom.mobileSearchClose) dom.mobileSearchClose.textContent = 'Done';
+      setMobileSearchButtonState('done');
       e.preventDefault();
     } else if (dom.appContainer && dom.appContainer.classList.contains('mobile-show-preview')) {
       showMobileList();
@@ -599,6 +599,34 @@ export function handleGlobalKeydown(e) {
   }
 }
 
+// Mobile Bottom Search Handlers & State
+let isMobileSearchFocused = false;
+
+export function setMobileSearchButtonState(mode) {
+  if (!dom.mobileSearchClose) return;
+  if (mode === 'clear') {
+    dom.mobileSearchClose.textContent = 'Clear';
+    dom.mobileSearchClose.classList.add('is-clear');
+  } else {
+    dom.mobileSearchClose.textContent = 'Done';
+    dom.mobileSearchClose.classList.remove('is-clear');
+  }
+}
+
+export function resetMobileSearch() {
+  if (dom.mobileSearchInput) {
+    dom.mobileSearchInput.value = '';
+    if (typeof dom.mobileSearchInput.blur === 'function') {
+      dom.mobileSearchInput.blur();
+    }
+  }
+  setMobileSearchButtonState('done');
+  if (dom.appContainer) {
+    dom.appContainer.classList.remove('mobile-search-open');
+  }
+  isMobileSearchFocused = false;
+}
+
 /**
  * Initializes all search, list, filter, button, and shortcut listeners.
  */
@@ -609,7 +637,6 @@ export function setupFinderListeners() {
     });
   }
 
-  // Mobile Bottom Search Handlers
   function openMobileSearch(e) {
     if (e && e.type === 'touchend') {
       e.preventDefault();
@@ -619,9 +646,9 @@ export function setupFinderListeners() {
     const isDocs = state.currentViewMode === 'docs';
     dom.mobileSearchInput.placeholder = isDocs ? 'Search documentation...' : 'Search notes & tasks...';
     dom.mobileSearchInput.value = isDocs ? (dom.docsSearchInput?.value || '') : (dom.searchInput?.value || '');
-    if (dom.mobileSearchClose) {
-      dom.mobileSearchClose.textContent = 'Done';
-    }
+    isMobileSearchFocused = true;
+    setMobileSearchButtonState('done');
+
     // Synchronous focus directly in user gesture stack for iPhone / iOS Safari
     dom.mobileSearchInput.focus();
     if (typeof dom.mobileSearchInput.setSelectionRange === 'function') {
@@ -633,9 +660,8 @@ export function setupFinderListeners() {
   function closeMobileSearch() {
     if (!dom.appContainer) return;
     dom.appContainer.classList.remove('mobile-search-open');
-    if (dom.mobileSearchClose) {
-      dom.mobileSearchClose.textContent = 'Done';
-    }
+    isMobileSearchFocused = false;
+    setMobileSearchButtonState('done');
   }
 
   function clearMobileSearch() {
@@ -662,48 +688,69 @@ export function setupFinderListeners() {
   }
 
   if (dom.mobileSearchClose) {
+    // Prevent input blur before click handler processes state
+    const preventPrematureBlur = (e) => e.preventDefault();
+    dom.mobileSearchClose.addEventListener('pointerdown', preventPrematureBlur);
+    dom.mobileSearchClose.addEventListener('mousedown', preventPrematureBlur);
+
     dom.mobileSearchClose.addEventListener('click', () => {
-      const btnText = (dom.mobileSearchClose.textContent || '').trim();
-      if (btnText === 'Done') {
-        // Blur to dismiss keyboard
+      const hasText = Boolean(dom.mobileSearchInput && dom.mobileSearchInput.value.trim());
+
+      if (isMobileSearchFocused) {
+        // User tapped "Done" while input was active
         if (dom.mobileSearchInput) {
           dom.mobileSearchInput.blur();
         }
-        // If there is query text, keep search dock open at bottom and switch to 'Clear'
-        if (dom.mobileSearchInput && dom.mobileSearchInput.value.trim()) {
-          dom.mobileSearchClose.textContent = 'Clear';
+        isMobileSearchFocused = false;
+
+        if (hasText) {
+          // Keep search dock open at bottom showing query; switch button to 'Clear' with distinct color
+          setMobileSearchButtonState('clear');
         } else {
-          // If empty, close search dock and restore floating search FAB
+          // Empty input: close search dock and restore floating search FAB
           closeMobileSearch();
         }
       } else {
-        // Button says 'Clear': wipe input, reset search, close dock, restore search FAB
-        clearMobileSearch();
+        // User tapped "Clear" while input was blurred (or empty Done)
+        if (hasText) {
+          clearMobileSearch();
+        } else {
+          closeMobileSearch();
+        }
       }
     });
   }
 
   if (dom.mobileSearchInput) {
     dom.mobileSearchInput.addEventListener('focus', () => {
-      if (dom.mobileSearchClose) {
-        dom.mobileSearchClose.textContent = 'Done';
-      }
+      isMobileSearchFocused = true;
+      setMobileSearchButtonState('done');
     });
 
     dom.mobileSearchInput.addEventListener('blur', () => {
-      if (dom.mobileSearchClose) {
-        dom.mobileSearchClose.textContent = dom.mobileSearchInput.value.trim() ? 'Clear' : 'Done';
+      isMobileSearchFocused = false;
+      setMobileSearchButtonState(dom.mobileSearchInput.value.trim() ? 'clear' : 'done');
+    });
+
+    dom.mobileSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        dom.mobileSearchInput.blur();
+        isMobileSearchFocused = false;
+        if (dom.mobileSearchInput.value.trim()) {
+          setMobileSearchButtonState('clear');
+        } else {
+          closeMobileSearch();
+        }
       }
     });
 
     dom.mobileSearchInput.addEventListener('input', () => {
       const val = dom.mobileSearchInput.value;
-      if (dom.mobileSearchClose) {
-        if (document.activeElement === dom.mobileSearchInput) {
-          dom.mobileSearchClose.textContent = 'Done';
-        } else {
-          dom.mobileSearchClose.textContent = val.trim() ? 'Clear' : 'Done';
-        }
+      if (isMobileSearchFocused) {
+        setMobileSearchButtonState('done');
+      } else {
+        setMobileSearchButtonState(val.trim() ? 'clear' : 'done');
       }
       if (state.currentViewMode === 'docs') {
         if (dom.docsSearchInput) {

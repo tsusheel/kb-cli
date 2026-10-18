@@ -1831,6 +1831,17 @@ html, body {
     opacity: 1;
   }
 
+  .btn-close-search.is-clear {
+    background: rgba(240, 136, 62, 0.14);
+    border-color: rgba(240, 136, 62, 0.35);
+    color: var(--accent-orange);
+  }
+
+  .btn-close-search.is-clear:hover,
+  .btn-close-search.is-clear:active {
+    background: rgba(240, 136, 62, 0.24);
+  }
+
   .markdown-body th, .markdown-body td {
     padding: 6px 10px;
     min-width: 95px;
