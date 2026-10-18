@@ -1066,27 +1066,62 @@ html, body {
   overflow-x: auto;
 }
 
-.markdown-body table {
-  display: block;
+/* Markdown Table Wrapper & Responsive Scrolling */
+.markdown-table-wrapper {
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
-  border-collapse: collapse;
-  margin: 14px 0;
-  font-size: 12px;
   -webkit-overflow-scrolling: touch;
+  margin: 16px 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: #010409;
+}
+
+.markdown-table-wrapper::-webkit-scrollbar {
+  height: 6px;
+}
+.markdown-table-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+.markdown-table-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-full);
+}
+.markdown-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.markdown-body table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-size: 12px;
+  display: table;
 }
 .markdown-body th, .markdown-body td {
   border: 1px solid var(--border-color);
-  padding: 6px 12px;
+  padding: 8px 14px;
   text-align: left;
+  line-height: 1.5;
+  vertical-align: top;
+  word-break: normal;
 }
 .markdown-body th {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.05);
   font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+}
+.markdown-body td code {
+  white-space: nowrap;
 }
 .markdown-body tr:nth-child(even) td {
   background: rgba(255, 255, 255, 0.015);
+}
+.markdown-body tr:hover td {
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .markdown-body img {
@@ -1674,19 +1709,19 @@ html, body {
   }
 
   .diagram-btn {
-    width: 24px;
-    height: 24px;
-    font-size: 11px;
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
   }
 
   .diagram-btn svg {
-    width: 11px;
-    height: 11px;
+    width: 12px;
+    height: 12px;
   }
 
   .mermaid-header-actions .code-copy-btn {
-    height: 24px;
-    padding: 0 6px;
+    height: 28px;
+    padding: 0 8px;
   }
 
   .mermaid-header-actions .code-copy-btn .copy-text {
@@ -1694,10 +1729,10 @@ html, body {
   }
 
   .mermaid-viewport {
-    height: 260px;
-    min-height: 180px;
-    max-height: 50vh;
-    touch-action: pan-y pinch-zoom;
+    height: 280px;
+    min-height: 200px;
+    max-height: 55vh;
+    touch-action: none;
   }
 
   .mermaid-block-wrapper.mermaid-fullscreen .mermaid-viewport {

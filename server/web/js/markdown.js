@@ -237,14 +237,25 @@ export function renderMarkdown(text) {
           const parseRow = (l) => l.slice(1, -1).split('|').map((c) => parseInline(c.trim()));
           let startIdx = 0;
           let hasHeaderDivider = false;
+          let alignments = [];
           if (tableLines.length >= 2 && /^\|(?:\s*:?-+:?\s*\|)+$/.test(tableLines[1])) {
             hasHeaderDivider = true;
+            alignments = tableLines[1].slice(1, -1).split('|').map((col) => {
+              const c = col.trim();
+              if (c.startsWith(':') && c.endsWith(':')) return 'center';
+              if (c.endsWith(':')) return 'right';
+              if (c.startsWith(':')) return 'left';
+              return '';
+            });
           }
 
-          let tHtml = '<table>';
+          let tHtml = '<div class="markdown-table-wrapper"><table>';
           if (hasHeaderDivider) {
             const headers = parseRow(tableLines[0]);
-            tHtml += '<thead><tr>' + headers.map((h) => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+            tHtml += '<thead><tr>' + headers.map((h, colIdx) => {
+              const align = alignments[colIdx] ? ` style="text-align:${alignments[colIdx]}"` : '';
+              return `<th${align}>${h}</th>`;
+            }).join('') + '</tr></thead><tbody>';
             startIdx = 2;
           } else {
             tHtml += '<tbody>';
@@ -254,9 +265,12 @@ export function renderMarkdown(text) {
           for (let r = startIdx; r < tableLines.length; r++) {
             if (/^\|(?:\s*:?-+:?\s*\|)+$/.test(tableLines[r])) continue;
             const cells = parseRow(tableLines[r]);
-            tHtml += '<tr>' + cells.map((c) => `<td>${c}</td>`).join('') + '</tr>';
+            tHtml += '<tr>' + cells.map((c, colIdx) => {
+              const align = alignments[colIdx] ? ` style="text-align:${alignments[colIdx]}"` : '';
+              return `<td${align}>${c}</td>`;
+            }).join('') + '</tr>';
           }
-          tHtml += '</tbody></table>';
+          tHtml += '</tbody></table></div>';
           out.push(tHtml);
           continue;
         }

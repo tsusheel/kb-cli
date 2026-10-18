@@ -177,10 +177,6 @@ export function setupMermaidPanZoom(wrapper) {
   // Pointer-based Panning (Mouse & Touch via Pointer Events)
   viewport.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
-    // On touch screens in non-fullscreen mode, don't capture single-finger touch so user can scroll page smoothly!
-    if (e.pointerType === 'touch' && !wrapper.classList.contains('mermaid-fullscreen')) {
-      return;
-    }
     isDragging = true;
     startX = e.clientX - tx;
     startY = e.clientY - ty;
@@ -201,14 +197,18 @@ export function setupMermaidPanZoom(wrapper) {
     if (isDragging) {
       isDragging = false;
       viewport.classList.remove('is-dragging');
-      try { viewport.releasePointerCapture(e.pointerId); } catch (_) {}
+      try {
+        if (e && e.pointerId !== undefined) {
+          viewport.releasePointerCapture(e.pointerId);
+        }
+      } catch (_) {}
     }
   };
 
   viewport.addEventListener('pointerup', stopDragging);
   viewport.addEventListener('pointercancel', stopDragging);
 
-  // Double-click to reset view
+  // Double-click or double-tap to reset view
   viewport.addEventListener('dblclick', (e) => {
     e.preventDefault();
     fitDiagram(true);
@@ -256,40 +256,75 @@ export function setupMermaidPanZoom(wrapper) {
     });
   }
 
-  // Two-finger pinch-to-zoom on touch devices
+  // Multi-touch gestures (Pinch-to-zoom and Two-finger Pan)
+  let isPinching = false;
   let initialPinchDist = 0;
   let initialPinchScale = 1;
+  let initialMidX = 0;
+  let initialMidY = 0;
+  let initialTx = 0;
+  let initialTy = 0;
 
   viewport.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
-      isDragging = false;
-      initialPinchDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
+      stopDragging();
+      isPinching = true;
+
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      initialPinchDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
       initialPinchScale = scale;
+
+      const vRect = viewport.getBoundingClientRect();
+      initialMidX = (t0.clientX + t1.clientX) / 2 - vRect.left;
+      initialMidY = (t0.clientY + t1.clientY) / 2 - vRect.top;
+      initialTx = tx;
+      initialTy = ty;
+
+      panzoomLayer.classList.remove('smooth-transition');
+      if (e.cancelable) e.preventDefault();
     }
-  }, { passive: true });
+  }, { passive: false });
 
   viewport.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2 && initialPinchDist > 0) {
-      const currentDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const vRect = viewport.getBoundingClientRect();
-      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - vRect.left;
-      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - vRect.top;
-      const factor = currentDist / initialPinchDist;
-      zoomTowards(initialPinchScale * factor, midX, midY, false);
-    }
-  }, { passive: true });
+    if (e.touches.length === 2 && isPinching && initialPinchDist > 0) {
+      if (e.cancelable) e.preventDefault();
 
-  viewport.addEventListener('touchend', (e) => {
-    if (e.touches.length < 2) {
-      initialPinchDist = 0;
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const currentDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      const vRect = viewport.getBoundingClientRect();
+      const curMidX = (t0.clientX + t1.clientX) / 2 - vRect.left;
+      const curMidY = (t0.clientY + t1.clientY) / 2 - vRect.top;
+
+      const ratio = currentDist / initialPinchDist;
+      const clampedScale = Math.min(Math.max(initialPinchScale * ratio, MIN_SCALE), MAX_SCALE);
+
+      // Simultaneous smooth focal zoom & dual-finger panning
+      tx = curMidX - (initialMidX - initialTx) * (clampedScale / initialPinchScale);
+      ty = curMidY - (initialMidY - initialTy) * (clampedScale / initialPinchScale);
+      scale = clampedScale;
+
+      clampPan();
+      applyTransform(false);
     }
-  });
+  }, { passive: false });
+
+  const endPinch = (e) => {
+    if (isPinching && (!e.touches || e.touches.length < 2)) {
+      isPinching = false;
+      initialPinchDist = 0;
+      if (e.touches && e.touches.length === 1) {
+        isDragging = true;
+        startX = e.touches[0].clientX - tx;
+        startY = e.touches[0].clientY - ty;
+        viewport.classList.add('is-dragging');
+      }
+    }
+  };
+
+  viewport.addEventListener('touchend', endPinch, { passive: true });
+  viewport.addEventListener('touchcancel', endPinch, { passive: true });
 
   // Esc key exits fullscreen
   document.addEventListener('keydown', (e) => {
