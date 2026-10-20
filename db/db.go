@@ -42,8 +42,7 @@ func InitDB(path string) error {
 }
 
 func InitSchema() error {
-	_, err := DB.Exec(schemaSQL)
-	return err
+	return RunMigrations(DB)
 }
 
 func CloseDB() error {

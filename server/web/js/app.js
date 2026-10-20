@@ -12,6 +12,7 @@ import { initPWA, handlePWAUrlAction } from './pwa.js';
 import { setupModalListeners } from './modal.js';
 import { initDocs } from './docs.js';
 import { initSwipeNavigation } from './swipe.js';
+import { pluginsManager } from './plugins.js';
 import {
   setupFinderListeners,
   loadData,
@@ -21,8 +22,9 @@ import {
 } from './finder.js';
 
 async function init() {
-  // 1. External UI libraries
+  // 1. External UI libraries & Plugins
   initMarkdownLibraries();
+  pluginsManager.init();
 
   // 2. Documentation subsystem
   initDocs();

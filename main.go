@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/tsusheel/kb-cli/app"
 	"github.com/tsusheel/kb-cli/cmd"
+	"github.com/tsusheel/kb-cli/plugins"
+	"github.com/tsusheel/kb-cli/sync"
 	"github.com/tsusheel/kb-cli/utils"
 )
 
@@ -98,6 +101,10 @@ func main() {
 	}
 
 	app.InitApp()
+
+	// Initialize plugin manager & start enabled plugins
+	plugins.InitManager(cmd.GetRootCmd(), nil, sync.NewAdapterRegistry())
+	_ = plugins.GetManager().StartEnabledPlugins(context.Background())
 
 	cmd.Execute()
 }

@@ -40,6 +40,10 @@ func RegisterRoutes() http.Handler {
 	mux.HandleFunc("/api/tags", requireAuth(handleGetTags))
 	mux.HandleFunc("/api/sync", requireAuth(handleSync))
 
+	// Plugin API Routes
+	mux.HandleFunc("/api/plugins", requireAuth(handlePluginList))
+	mux.HandleFunc("/api/plugins/", requireAuth(handlePluginDispatch))
+
 	// Documentation Routes (publicly accessible)
 	mux.HandleFunc("/api/docs", handleGetDocsTree)
 	mux.HandleFunc("/api/docs/content", handleGetDocContent)
@@ -677,4 +681,115 @@ func handleGetDocContent(w http.ResponseWriter, r *http.Request) {
 		"content": content,
 	})
 }
+
+func handlePluginList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	records, err := db.ListPluginRecords()
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, records)
+}
+
+func handlePluginDispatch(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/plugins/")
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	pluginID := parts[0]
+	if len(parts) >= 2 && parts[1] == "entries" {
+		if len(parts) == 2 {
+			switch r.Method {
+			case http.MethodGet:
+				filter := models.EntryFilter{
+					PluginID:   pluginID,
+					EntityType: r.URL.Query().Get("type"),
+					Status:     r.URL.Query().Get("status"),
+					SearchText: r.URL.Query().Get("search"),
+				}
+				if date := r.URL.Query().Get("date"); date != "" {
+					filter.EntryDate = &date
+				}
+				if parentID := r.URL.Query().Get("parent_id"); parentID != "" {
+					filter.ParentID = &parentID
+				}
+				entries, err := db.QueryEntries(filter)
+				if err != nil {
+					jsonError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+				jsonResponse(w, http.StatusOK, entries)
+			case http.MethodPost:
+				var entry models.PluginEntry
+				if err := json.NewDecoder(r.Body).Decode(&entry); err != nil {
+					jsonError(w, http.StatusBadRequest, "invalid json body")
+					return
+				}
+				entry.PluginID = pluginID
+				actor := models.DefaultUserActor()
+				if err := db.CreateEntry(nil, &entry, actor); err != nil {
+					jsonError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+				jsonResponse(w, http.StatusCreated, entry)
+			default:
+				jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		} else if len(parts) == 3 {
+			entryID := parts[2]
+			switch r.Method {
+			case http.MethodGet:
+				entry, err := db.GetEntry(pluginID, entryID)
+				if err != nil {
+					if err == db.ErrEntryNotFound {
+						http.NotFound(w, r)
+					} else {
+						jsonError(w, http.StatusInternalServerError, err.Error())
+					}
+					return
+				}
+				jsonResponse(w, http.StatusOK, entry)
+			case http.MethodPut:
+				var entry models.PluginEntry
+				if err := json.NewDecoder(r.Body).Decode(&entry); err != nil {
+					jsonError(w, http.StatusBadRequest, "invalid json body")
+					return
+				}
+				entry.PluginID = pluginID
+				entry.ID = entryID
+				actor := models.DefaultUserActor()
+				if err := db.UpdateEntry(nil, &entry, 0, actor); err != nil {
+					jsonError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+				jsonResponse(w, http.StatusOK, entry)
+			case http.MethodDelete:
+				reason := r.URL.Query().Get("reason")
+				if reason == "" {
+					reason = "deleted via web API"
+				}
+				actor := models.DefaultUserActor()
+				if err := db.SoftDeleteEntry(nil, pluginID, entryID, reason, actor); err != nil {
+					jsonError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+				jsonResponse(w, http.StatusOK, map[string]bool{"deleted": true})
+			default:
+				jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+			return
+		}
+	}
+
+	http.NotFound(w, r)
+}
+
 

@@ -12,6 +12,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/tsusheel/kb-cli/db"
 	"github.com/tsusheel/kb-cli/models"
+	"github.com/tsusheel/kb-cli/plugins"
 	"github.com/tsusheel/kb-cli/utils"
 )
 
@@ -227,6 +228,21 @@ func registerTools(s *server.MCPServer) {
 		mcp.WithBoolean("compact", mcp.Description("Whether to return compact summaries with preview snippets (default true)")),
 	)
 	s.AddTool(getOrphansTool, handleGetOrphans)
+
+	// 23+. Dynamic tools contributed by active plugins
+	for _, pTool := range plugins.GetRegisteredMCPTools() {
+		toolDef := mcp.NewTool(pTool.Name, mcp.WithDescription(pTool.Description))
+		curTool := pTool
+		s.AddTool(toolDef, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			argsJSON, _ := json.Marshal(request.Params.Arguments)
+			res, err := curTool.Handler(ctx, argsJSON)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			resBytes, _ := json.Marshal(res)
+			return mcp.NewToolResultText(string(resBytes)), nil
+		})
+	}
 }
 
 func registerResources(s *server.MCPServer) {
