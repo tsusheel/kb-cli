@@ -4,12 +4,13 @@
 
 `kb-cli` is a local-first, terminal-centric personal knowledge base and second brain written in **Go (1.23+)**. It is designed around the core belief that personal thought capture and retrieval must be friction-free, instantaneous (< 50ms), and autonomous.
 
-The application unifies five primary operational interfaces into a single standalone static binary:
+The application unifies six primary operational interfaces into a single standalone static binary:
 1. **The CLI Command Interface:** Fast, positional command-line commands for capturing, listing, triaging, editing, and deleting notes without leaving the terminal.
 2. **The Embedded Web Application:** A modern, zero-dependency dual-pane fuzzy finder with live Markdown and Mermaid diagram rendering, installable as an offline Progressive Web App (PWA).
 3. **The Embedded SQLite Engine:** Local-first storage with Write-Ahead Logging (WAL) and SQLite FTS5 for instant sub-millisecond keyword and facet queries.
-4. **The Bidirectional PostgreSQL Sync Engine:** Cloud replication engine that synchronizes notes, tags, links, daily logs, and audit trails across machines using timestamp watermarks.
-5. **The Model Context Protocol (MCP) Server:** Stdio-based AI assistant interface allowing agents (Claude, Antigravity, Cursor, Cline) to read, search, curate, link, and audit notes autonomously.
+4. **The Bidirectional PostgreSQL Sync Engine:** Cloud replication engine that synchronizes notes, tags, links, daily logs, audit trails, and plugin outbox entries across machines using timestamp watermarks.
+5. **The Model Context Protocol (MCP) Server:** Stdio-based AI assistant interface allowing agents (Claude, Antigravity, Cursor, Cline) to read, search, curate, link, audit notes, and invoke dynamic plugin tools autonomously.
+6. **The Extensible Multi-Plugin Subsystem:** An out-of-process JSON-RPC plugin runner, public Go SDK (`plugins/api/`), capability security boundary, polymorphic storage (`plugin_entries`), and transactional outbox synchronization.
 
 ```mermaid
 graph TB
@@ -17,6 +18,7 @@ graph TB
         CLI["Terminal Shell (Cobra CLI)"]
         WebPWA["Web Browser (PWA / Dual-Pane SPA)"]
         AIAgent["AI Assistant (Claude / Antigravity via MCP)"]
+        ExtPlugins["External Plugins (e.g. Gym, Finance via JSON-RPC)"]
     end
 
     subgraph BinaryCore ["Single Compiled Go Binary (kb-cli)"]
@@ -27,8 +29,9 @@ graph TB
             CmdSub["Cobra CLI Subsystem (cmd/)"]
             WebSub["HTTP Server (server/routes.go + //go:embed)"]
             MCPSub["MCP Server (mcp/server.go / stdio)"]
-            SyncSub["Sync Engine (sync/postgres.go)"]
-            DBSub["SQLite Engine (db/ + go-sqlite3)"]
+            SyncSub["Sync Engine & Coordinator (sync/)"]
+            PluginSub["Plugin Manager & Loader (plugins/)"]
+            DBSub["SQLite Engine & Universal Store (db/)"]
         end
     end
 
@@ -41,10 +44,12 @@ graph TB
     CLI --> CmdSub
     WebPWA --> WebSub
     AIAgent --> MCPSub
+    ExtPlugins <-->|JSON-RPC 2.0 stdio| PluginSub
 
     CmdSub --> Init
     WebSub --> Init
     MCPSub --> Init
+    PluginSub --> Init
 
     Init --> Config
     Config --> KeyringStore
@@ -53,6 +58,11 @@ graph TB
     WebSub --> DBSub
     MCPSub --> DBSub
     SyncSub --> DBSub
+    PluginSub --> DBSub
+
+    PluginSub --> MCPSub
+    PluginSub --> WebSub
+    PluginSub --> CmdSub
 
     DBSub --> SQLiteFile
     SyncSub <--> CloudPostgres
@@ -155,6 +165,16 @@ The synchronization engine provides cloud persistence without sacrificing local-
 - Leverages Go's goroutines to pull remote changes concurrently across notes, tags, links, logs, and audit entries.
 - Wraps local merges in atomic SQLite transactions, featuring automatic tag harmonization to resolve cross-machine ID conflicts.
 - Pushes local changes in batched multi-row SQL queries with Last-Write-Wins (LWW) conflict handling.
+- Coordinates external plugin synchronization via `SyncCoordinator` and the `sync_outbox` transactional queue.
+
+---
+
+### 3.5 The Extensible Multi-Plugin Subsystem (`plugins/`, `plugins/loader/`, `plugins/api/`)
+The plugin engine enables external Go binaries (such as workout loggers or budget managers) to extend `kb-cli` while running in completely isolated subprocesses:
+- **Out-of-Process JSON-RPC:** Plugins run in their own process spaces and communicate over standard I/O framing, preventing third-party code from compromising host memory or stability.
+- **Capability-Based Security:** Granular permissions (`storage.entries`, `audit.write`, `secrets`, `network`) must be explicitly granted before plugins can access platform services.
+- **Universal Storage Envelope:** Plugins store polymorphic records in `plugin_entries` with automatic revision snapshotting, SQLite FTS5 index updates, and transactional outbox enqueueing.
+- **Dynamic Interface Mounting:** Registered plugins dynamically mount Cobra CLI subcommands, embed Web SPA route views, and expose tools to AI agents via the MCP server.
 
 ---
 

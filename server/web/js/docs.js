@@ -1,15 +1,25 @@
 /**
  * KB-CLI Web Fuzzy Finder — Documentation Directory Tree & Viewer Controller
  * Manages the collapsible tree directory view, document selection,
- * markdown/mermaid rendering, filtering, and deep-link routing.
+ * markdown/mermaid rendering, filtering, arbitrary nested folders, drag-and-drop import,
+ * in-browser document editing, and in-doc search.
  */
 
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { fetchDocsTree, fetchDocContent } from './api.js';
+import { 
+  fetchDocsTree, 
+  fetchDocContent, 
+  saveDocContent, 
+  createDoc, 
+  createDocFolder, 
+  deleteDoc, 
+  importDocsTree, 
+  searchDocs 
+} from './api.js';
 import { renderMarkdown, applyPostMarkdownEnhancements } from './markdown.js';
-import { showMobileDetail, showMobileList, updateViewModeDisplay, resetMobileSearch, filterAndRender } from './finder.js';
-import { escapeHtml, scrollPreviewToTop } from './utils.js';
+import { showMobileDetail, showMobileList, updateViewModeDisplay, resetMobileSearch, filterAndRender, loadData, loadTags } from './finder.js';
+import { escapeHtml, scrollPreviewToTop, showToast } from './utils.js';
 
 let isDocsInitialized = false;
 
@@ -28,14 +38,139 @@ export async function initDocs() {
     dom.tabDocs.addEventListener('click', () => switchViewMode('docs'));
   }
 
-  // 2. Filter input listener
-  if (dom.docsSearchInput) {
-    dom.docsSearchInput.addEventListener('input', (e) => {
-      renderDocsTree(e.target.value.trim());
+  // 2. Action Buttons for Documents and Folders
+  if (dom.newDocBtn) {
+    dom.newDocBtn.addEventListener('click', () => openNewDocModal());
+  }
+  if (dom.newFolderBtn) {
+    dom.newFolderBtn.addEventListener('click', () => openNewFolderModal());
+  }
+  if (dom.editDocBtn) {
+    dom.editDocBtn.addEventListener('click', () => openEditDocModal());
+  }
+  if (dom.deleteDocBtn) {
+    dom.deleteDocBtn.addEventListener('click', async () => {
+      if (!state.selectedDocPath) return;
+      if (confirm(`Are you sure you want to delete "${state.selectedDocPath}"?`)) {
+        try {
+          await deleteDoc(state.selectedDocPath);
+          showToast(`Deleted "${state.selectedDocPath}"`);
+          state.docsTree = await fetchDocsTree();
+          state.selectedDocPath = null;
+          renderDocsTree('');
+          const firstPath = getFirstDocPath(state.docsTree);
+          if (firstPath) {
+            await selectDoc(firstPath);
+          }
+          await loadData();
+          await loadTags(state.currentViewMode === 'docs' ? 'docs' : 'notes');
+        } catch (err) {
+          showToast(`Error: ${err.message}`);
+        }
+      }
     });
   }
 
-  // 3. Intra-document link interception in preview markdown body
+  // 5. Doc Modal Tab Toggle (Write / Preview)
+  if (dom.docModalTabWrite && dom.docModalTabPreview) {
+    dom.docModalTabWrite.addEventListener('click', () => {
+      dom.docModalTabWrite.classList.add('active');
+      dom.docModalTabPreview.classList.remove('active');
+      if (dom.formDocContent) dom.formDocContent.style.display = 'block';
+      if (dom.docModalContentPreview) dom.docModalContentPreview.style.display = 'none';
+    });
+
+    dom.docModalTabPreview.addEventListener('click', () => {
+      dom.docModalTabPreview.classList.add('active');
+      dom.docModalTabWrite.classList.remove('active');
+      if (dom.formDocContent) dom.formDocContent.style.display = 'none';
+      if (dom.docModalContentPreview) {
+        dom.docModalContentPreview.style.display = 'block';
+        dom.docModalContentPreview.innerHTML = renderMarkdown(dom.formDocContent?.value || '');
+      }
+    });
+  }
+
+  // Close Doc Modal
+  if (dom.docModalCloseBtn) {
+    dom.docModalCloseBtn.addEventListener('click', closeDocModal);
+  }
+  if (dom.docModalCancelBtn) {
+    dom.docModalCancelBtn.addEventListener('click', closeDocModal);
+  }
+
+  // Submit Doc Form
+  if (dom.docForm) {
+    dom.docForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pathVal = (dom.formDocPath?.value || '').trim();
+      const titleVal = (dom.formDocTitle?.value || '').trim();
+      const contentVal = dom.formDocContent?.value || '';
+      const tagsVal = (dom.formDocTags?.value || '')
+        .split(',')
+        .map(t => t.trim().replace(/^#/, ''))
+        .filter(Boolean);
+
+      if (!pathVal) {
+        alert('Please enter a document path or filename');
+        return;
+      }
+
+      try {
+        if (state.editingDocPath) {
+          await saveDocContent(pathVal, titleVal, contentVal, tagsVal);
+          showToast(`Saved "${titleVal || pathVal}"`);
+        } else {
+          await createDoc({ path: pathVal, title: titleVal, content: contentVal, tags: tagsVal });
+          showToast(`Created "${titleVal || pathVal}"`);
+        }
+        closeDocModal();
+        state.docsTree = await fetchDocsTree();
+        if (state.docsCache) {
+          state.docsCache.delete(pathVal);
+        }
+        renderDocsTree(dom.searchInput?.value || '');
+        await selectDoc(pathVal);
+        await loadData();
+        await loadTags(state.currentViewMode === 'docs' ? 'docs' : 'notes');
+      } catch (err) {
+        showToast(`Save failed: ${err.message}`);
+      }
+    });
+  }
+
+  // Close Folder Modal
+  if (dom.folderModalCloseBtn) {
+    dom.folderModalCloseBtn.addEventListener('click', closeFolderModal);
+  }
+  if (dom.folderModalCancelBtn) {
+    dom.folderModalCancelBtn.addEventListener('click', closeFolderModal);
+  }
+
+  // Submit Folder Form
+  if (dom.folderForm) {
+    dom.folderForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const folderPath = (dom.formFolderPath?.value || '').trim();
+      const folderTitle = (dom.formFolderTitle?.value || '').trim();
+      if (!folderPath) {
+        alert('Please enter a folder path');
+        return;
+      }
+      try {
+        await createDocFolder({ path: folderPath, title: folderTitle });
+        closeFolderModal();
+        showToast(`Created folder "${folderTitle || folderPath}"`);
+        state.docsExpandedFolders.add(folderPath);
+        state.docsTree = await fetchDocsTree();
+        renderDocsTree('');
+      } catch (err) {
+        showToast(`Error: ${err.message}`);
+      }
+    });
+  }
+
+  // 6. Intra-document link interception in preview markdown body
   if (dom.previewMarkdownBody) {
     dom.previewMarkdownBody.addEventListener('click', (e) => {
       if (state.currentViewMode !== 'docs') return;
@@ -61,11 +196,14 @@ export async function initDocs() {
     });
   }
 
-  // 4. Check for URL deep linking
+  // 7. Check for URL deep linking
   handleDocsRouting();
   window.addEventListener('popstate', handleDocsRouting);
 
-  // 5. Pre-load documentation tree and prefetch all documents in background
+  // 8. Initialize Drag-and-Drop Folder Importer
+  initDragAndDrop();
+
+  // 9. Pre-load documentation tree and prefetch all documents in background
   loadDocsTree();
 }
 
@@ -85,45 +223,50 @@ export function handleDocsRouting() {
  */
 export async function switchViewMode(mode, targetDocPath = null) {
   state.currentViewMode = mode;
-
   const isDocs = mode === 'docs';
 
   // Reset search state across both desktop and mobile
   resetMobileSearch();
   if (dom.searchInput) {
     dom.searchInput.value = '';
+    dom.searchInput.placeholder = isDocs ? 'Search docs (/ to focus)...' : 'Search (/ to focus)';
     if (dom.clearSearchBtn) dom.clearSearchBtn.style.display = 'none';
-  }
-  if (dom.docsSearchInput) {
-    dom.docsSearchInput.value = '';
   }
 
   // Toggle navigation tab active states
   if (dom.tabNotes) dom.tabNotes.classList.toggle('active', !isDocs);
   if (dom.tabDocs) dom.tabDocs.classList.toggle('active', isDocs);
 
-  // Toggle Left Panes & Filter Bar
+  // Toggle Left Panes & Filter Bar (Filter Bar stays visible in both modes for tags)
   if (dom.resultsPane) dom.resultsPane.style.display = isDocs ? 'none' : 'flex';
-  if (dom.filterBar) dom.filterBar.style.display = isDocs ? 'none' : 'flex';
+  if (dom.filterBar) dom.filterBar.style.display = 'flex';
+  if (dom.typeFilterPills) dom.typeFilterPills.style.display = isDocs ? 'none' : 'flex';
   if (dom.docsPane) dom.docsPane.style.display = isDocs ? 'flex' : 'none';
 
-  // Toggle Header action buttons
-  if (dom.newNoteBtn) dom.newNoteBtn.style.display = isDocs ? 'none' : 'inline-flex';
-  if (dom.syncBtn) dom.syncBtn.style.display = isDocs ? 'none' : 'inline-flex';
+  // Toggle Header action buttons - ALWAYS show sync button and search bar!
+  if (dom.syncBtn) dom.syncBtn.style.display = 'inline-flex';
   if (dom.searchInput) {
-    dom.searchInput.parentElement.parentElement.style.display = isDocs ? 'none' : 'flex';
+    dom.searchInput.parentElement.parentElement.style.display = 'flex';
   }
+  if (dom.newNoteBtn) dom.newNoteBtn.style.display = isDocs ? 'none' : 'inline-flex';
+  if (dom.newDocBtn) dom.newDocBtn.style.display = isDocs ? 'inline-flex' : 'none';
+  if (dom.newFolderBtn) dom.newFolderBtn.style.display = isDocs ? 'inline-flex' : 'none';
 
-  // Toggle Preview action buttons not applicable to docs
+  // Toggle Preview action buttons
   if (dom.editNoteBtn) dom.editNoteBtn.style.display = isDocs ? 'none' : 'inline-flex';
   if (dom.deleteNoteBtn) dom.deleteNoteBtn.style.display = isDocs ? 'none' : 'inline-flex';
+  if (dom.editDocBtn) dom.editDocBtn.style.display = isDocs ? 'inline-flex' : 'none';
+  if (dom.deleteDocBtn) dom.deleteDocBtn.style.display = isDocs ? 'inline-flex' : 'none';
   if (dom.toggleStatusBtn) dom.toggleStatusBtn.style.display = isDocs ? 'none' : 'inline-flex';
   if (dom.previewMetaRow) {
     const metaRow = document.querySelector('.preview-meta-row');
     if (metaRow) metaRow.style.display = isDocs ? 'none' : 'flex';
   }
-  if (dom.previewTagsRow) dom.previewTagsRow.style.display = isDocs ? 'none' : 'flex';
+  if (dom.previewTagsRow) dom.previewTagsRow.style.display = 'flex';
   if (dom.docsBreadcrumb) dom.docsBreadcrumb.style.display = isDocs ? 'flex' : 'none';
+
+  // Load scope-appropriate tags
+  await loadTags(isDocs ? 'docs' : 'notes');
 
   if (isDocs) {
     // Load docs tree if empty
@@ -134,7 +277,7 @@ export async function switchViewMode(mode, targetDocPath = null) {
     }
 
     // Determine document to display
-    const docToLoad = targetDocPath || state.selectedDocPath || 'README.md';
+    const docToLoad = targetDocPath || state.selectedDocPath || getFirstDocPath(state.docsTree) || 'README.md';
     const isMobile = window.innerWidth <= 768;
     const shouldOpenMobile = !isMobile || Boolean(targetDocPath);
     await selectDoc(docToLoad, Boolean(targetDocPath), shouldOpenMobile);
@@ -146,7 +289,6 @@ export async function switchViewMode(mode, targetDocPath = null) {
     if (window.location.pathname.startsWith('/docs')) {
       window.history.pushState({}, '', '/');
     }
-    // Return mobile view to list if applicable
     showMobileList();
     scrollPreviewToTop();
     filterAndRender();
@@ -164,7 +306,7 @@ export async function loadDocsTree() {
       }
       state.docsTree = await fetchDocsTree();
     }
-    renderDocsTree(dom.docsSearchInput?.value || '');
+    renderDocsTree(dom.searchInput?.value || '');
     prefetchAllDocs(state.docsTree);
   } catch (err) {
     console.error('Error loading docs tree:', err);
@@ -172,6 +314,18 @@ export async function loadDocsTree() {
       dom.docsTree.innerHTML = `<div class="empty-list">Failed to load documentation: ${escapeHtml(err.message)}</div>`;
     }
   }
+}
+
+function getFirstDocPath(tree) {
+  if (!tree || !Array.isArray(tree)) return null;
+  for (const item of tree) {
+    if (item.type === 'file' && item.path) return item.path;
+    if (item.children && Array.isArray(item.children)) {
+      const childDoc = getFirstDocPath(item.children);
+      if (childDoc) return childDoc;
+    }
+  }
+  return null;
 }
 
 /**
@@ -203,12 +357,80 @@ function prefetchAllDocs(tree) {
         state.docsCache.set(docPath, {
           content: data.content,
           html,
+          tags: data.tags || [],
+          title: data.title || '',
         });
       }
     } catch {
       // Ignore background prefetch errors
     }
   });
+}
+
+/**
+ * Recursive rendering of a tree item (folder or document) for arbitrary nested depth.
+ */
+function renderTreeItem(item, query, depth = 0) {
+  const isDirectory = item.type === 'directory';
+  const itemPath = item.path || item.Path || '';
+  const itemTitle = item.title || item.Title || item.name || item.Name || itemPath;
+  const itemName = item.name || item.Name || '';
+
+  if (isDirectory) {
+    const isExpanded = state.docsExpandedFolders.has(itemPath) || state.docsExpandedFolders.has(itemName) || (query && query.length > 0) || Boolean(state.activeDocTagFilter);
+    const childrenList = item.children || item.Children || [];
+
+    const renderedChildren = childrenList
+      .map((child) => renderTreeItem(child, query, depth + 1))
+      .filter(Boolean);
+
+    const selfMatches = (!query && !state.activeDocTagFilter) || 
+      (!state.activeDocTagFilter && query && (itemTitle.toLowerCase().includes(query) || itemName.toLowerCase().includes(query) || itemPath.toLowerCase().includes(query)));
+
+    if ((query || state.activeDocTagFilter) && !selfMatches && renderedChildren.length === 0) {
+      return null;
+    }
+
+    const folderBadge = childrenList.length;
+
+    return `
+      <div class="tree-folder ${isExpanded ? 'expanded' : 'collapsed'}" data-folder-path="${escapeHtml(itemPath || itemName)}">
+        <div class="tree-folder-header" data-folder-path="${escapeHtml(itemPath || itemName)}">
+          <span class="tree-chevron">${isExpanded ? '▼' : '▶'}</span>
+          <span class="tree-folder-title">${escapeHtml(itemTitle)}</span>
+          <span class="tree-count-badge">${folderBadge}</span>
+        </div>
+        <div class="tree-folder-children" style="display: ${isExpanded ? 'block' : 'none'};">
+          ${renderedChildren.length > 0 ? renderedChildren.join('') : '<div class="empty-list" style="padding: 4px 8px; font-size: 11px;">(empty)</div>'}
+        </div>
+      </div>
+    `;
+  } else {
+    if (query) {
+      const match = itemTitle.toLowerCase().includes(query) || 
+                    itemName.toLowerCase().includes(query) || 
+                    itemPath.toLowerCase().includes(query);
+      if (!match) return null;
+    }
+
+    const itemTags = item.tags || item.Tags || [];
+    if (state.activeDocTagFilter) {
+      const hasTag = itemTags.some(t => t.toLowerCase() === state.activeDocTagFilter.toLowerCase());
+      if (!hasTag) return null;
+    }
+
+    const isSelected = state.selectedDocPath === itemPath;
+    const tagsHtml = itemTags.length > 0 
+      ? `<span class="tree-file-tags">${itemTags.slice(0, 2).map(t => `<span class="tree-tag-badge">#${escapeHtml(t)}</span>`).join('')}</span>` 
+      : '';
+
+    return `
+      <div class="tree-file-item ${isSelected ? 'active' : ''}" data-path="${escapeHtml(itemPath)}">
+        <span class="tree-file-title" title="${escapeHtml(itemTitle)}">${escapeHtml(itemTitle)}</span>
+        ${tagsHtml}
+      </div>
+    `;
+  }
 }
 
 /**
@@ -222,65 +444,16 @@ export function renderDocsTree(filterText = '') {
   }
 
   const query = filterText.toLowerCase();
-  let html = '<div class="docs-tree-root">';
+  const renderedNodes = state.docsTree
+    .map((item) => renderTreeItem(item, query, 0))
+    .filter(Boolean);
 
-  state.docsTree.forEach((folder) => {
-    const folderName = folder.name || folder.Name || '';
-    const isExpanded = state.docsExpandedFolders.has(folderName) || query.length > 0;
+  if (renderedNodes.length === 0) {
+    dom.docsTree.innerHTML = `<div class="empty-list">No docs matching "${escapeHtml(filterText)}"</div>`;
+    return;
+  }
 
-    // Filter children if query is present (supports both lowercase and uppercase properties)
-    const childrenList = folder.children || folder.Children || [];
-    const visibleChildren = childrenList.filter((item) => {
-      const itemTitle = item.title || item.Title || '';
-      const itemName = item.name || item.Name || '';
-      const itemPath = item.path || item.Path || '';
-      if (!query) return true;
-      return (
-        itemTitle.toLowerCase().includes(query) ||
-        itemName.toLowerCase().includes(query) ||
-        itemPath.toLowerCase().includes(query)
-      );
-    });
-
-    if (query && visibleChildren.length === 0) {
-      return; // Skip empty folders when filtering
-    }
-
-    const folderTitle = folder.title || folder.Title || folderName;
-    const folderBadge = visibleChildren.length;
-
-    html += `
-      <div class="tree-folder ${isExpanded ? 'expanded' : 'collapsed'}" data-folder="${escapeHtml(folderName)}">
-        <div class="tree-folder-header" data-folder="${escapeHtml(folderName)}">
-          <span class="tree-chevron">${isExpanded ? '▼' : '▶'}</span>
-          <span class="tree-folder-title">${escapeHtml(folderTitle)}</span>
-          <span class="tree-count-badge">${folderBadge}</span>
-        </div>
-        <div class="tree-folder-children" style="display: ${isExpanded ? 'block' : 'none'};">
-    `;
-
-    visibleChildren.forEach((file) => {
-      const filePath = file.path || file.Path || '';
-      const fileTitle = file.title || file.Title || file.name || file.Name || filePath;
-      const isSelected = state.selectedDocPath === filePath;
-
-      html += `
-        <div class="tree-file-item ${isSelected ? 'active' : ''}" data-path="${escapeHtml(filePath)}">
-          <span class="tree-file-title" title="${escapeHtml(fileTitle)}">${escapeHtml(fileTitle)}</span>
-        </div>
-      `;
-    });
-
-    html += `
-        </div>
-      </div>
-    `;
-  });
-
-  html += '</div>';
-  dom.docsTree.innerHTML = html;
-
-  // Bind click handlers
+  dom.docsTree.innerHTML = `<div class="docs-tree-root">${renderedNodes.join('')}</div>`;
   bindTreeEvents();
 }
 
@@ -294,13 +467,13 @@ function bindTreeEvents() {
   dom.docsTree.querySelectorAll('.tree-folder-header').forEach((el) => {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
-      const folder = el.getAttribute('data-folder');
-      if (state.docsExpandedFolders.has(folder)) {
-        state.docsExpandedFolders.delete(folder);
+      const folderPath = el.getAttribute('data-folder-path');
+      if (state.docsExpandedFolders.has(folderPath)) {
+        state.docsExpandedFolders.delete(folderPath);
       } else {
-        state.docsExpandedFolders.add(folder);
+        state.docsExpandedFolders.add(folderPath);
       }
-      renderDocsTree(dom.docsSearchInput?.value || '');
+      renderDocsTree(dom.searchInput?.value || '');
     });
   });
 
@@ -321,13 +494,15 @@ export async function selectDoc(docPath, updateUrl = true, openMobilePreview = t
   state.selectedDocPath = docPath;
   scrollPreviewToTop();
 
-  // Auto-expand folder in tree if document is inside one
+  // Auto-expand all ancestor folders of this doc path
   if (docPath && docPath.includes('/')) {
-    const folder = docPath.split('/')[0];
-    if (!state.docsExpandedFolders.has(folder)) {
-      state.docsExpandedFolders.add(folder);
-      renderDocsTree(dom.docsSearchInput?.value || '');
+    const parts = docPath.split('/');
+    let cur = '';
+    for (let i = 0; i < parts.length - 1; i++) {
+      cur = cur ? cur + '/' + parts[i] : parts[i];
+      state.docsExpandedFolders.add(cur);
     }
+    renderDocsTree(dom.searchInput?.value || '');
   }
 
   // Update active item in tree
@@ -352,7 +527,7 @@ export async function selectDoc(docPath, updateUrl = true, openMobilePreview = t
 
   // Update Breadcrumb
   if (dom.docsBreadcrumbPath) {
-    dom.docsBreadcrumbPath.textContent = docPath.replace('/', '  ›  ');
+    dom.docsBreadcrumbPath.textContent = docPath.replace(/\//g, '  ›  ');
   }
 
   if (dom.previewShortId) {
@@ -362,11 +537,10 @@ export async function selectDoc(docPath, updateUrl = true, openMobilePreview = t
   // Fast path: if document is cached in memory, render immediately with zero flicker
   if (state.docsCache && state.docsCache.has(docPath)) {
     const cachedData = state.docsCache.get(docPath);
-    renderLoadedDoc(docPath, cachedData.content, cachedData.html, openMobilePreview);
+    renderLoadedDoc(docPath, cachedData.content, cachedData.html, openMobilePreview, cachedData.tags || []);
     return;
   }
 
-  // Not cached yet: smoothly dim preview pane instead of collapsing layout
   if (dom.previewPane) {
     dom.previewPane.classList.add('doc-transitioning');
   }
@@ -376,9 +550,14 @@ export async function selectDoc(docPath, updateUrl = true, openMobilePreview = t
     if (state.selectedDocPath !== docPath) return;
     const html = renderMarkdown(data.content);
     if (state.docsCache) {
-      state.docsCache.set(docPath, { content: data.content, html });
+      state.docsCache.set(docPath, {
+        content: data.content,
+        html,
+        tags: data.tags || [],
+        title: data.title || '',
+      });
     }
-    renderLoadedDoc(docPath, data.content, html, openMobilePreview);
+    renderLoadedDoc(docPath, data.content, html, openMobilePreview, data.tags || []);
   } catch (err) {
     console.error('Error fetching doc content:', err);
     if (dom.previewMarkdownBody) {
@@ -394,8 +573,9 @@ export async function selectDoc(docPath, updateUrl = true, openMobilePreview = t
 /**
  * Renders loaded document markdown and triggers post-render enhancements.
  */
-function renderLoadedDoc(docPath, content, html, openMobilePreview) {
+function renderLoadedDoc(docPath, content, html, openMobilePreview, tags = []) {
   state.currentDocContent = content;
+  state.currentDocTags = tags;
 
   // Derive title from content or path
   let title = docPath;
@@ -404,6 +584,19 @@ function renderLoadedDoc(docPath, content, html, openMobilePreview) {
     title = firstLine.replace('# ', '').trim();
   }
   if (dom.previewTitle) dom.previewTitle.textContent = title;
+
+  // Render tags row
+  if (dom.previewTagsRow) {
+    if (tags && tags.length > 0) {
+      dom.previewTagsRow.innerHTML = tags
+        .map((t) => `<span class="preview-tag-chip" data-tag="${escapeHtml(t)}">#${escapeHtml(t)}</span>`)
+        .join('');
+      dom.previewTagsRow.style.display = 'flex';
+    } else {
+      dom.previewTagsRow.innerHTML = '';
+      dom.previewTagsRow.style.display = 'none';
+    }
+  }
 
   // Render Markdown and Mermaid diagrams
   if (dom.previewMarkdownBody) {
@@ -422,16 +615,257 @@ function renderLoadedDoc(docPath, content, html, openMobilePreview) {
   }
 }
 
+/**
+ * Main Search handler when in Docs mode.
+ */
+export function handleDocsSearch(query) {
+  query = (query || '').trim();
+  renderDocsTree(query);
+  countDocsTreeMatches(query);
+}
+
+/**
+ * Highlights text occurrences inside the active document preview.
+ */
+function highlightInDoc(query) {
+  if (!dom.previewMarkdownBody || !state.currentDocContent) return;
+
+  if (!query) {
+    dom.previewMarkdownBody.innerHTML = renderMarkdown(state.currentDocContent);
+    applyPostMarkdownEnhancements(dom.previewMarkdownBody);
+    if (dom.searchCount) dom.searchCount.textContent = '0';
+    return;
+  }
+
+  // Re-render fresh HTML
+  dom.previewMarkdownBody.innerHTML = renderMarkdown(state.currentDocContent);
+  applyPostMarkdownEnhancements(dom.previewMarkdownBody);
+
+  const regex = new RegExp(`(${escapeRegex(query)})`, 'gi');
+  let matchCount = 0;
+
+  function walk(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (regex.test(node.nodeValue)) {
+        const span = document.createElement('span');
+        span.innerHTML = node.nodeValue.replace(regex, (m) => {
+          matchCount++;
+          return `<mark class="highlight-match">${escapeHtml(m)}</mark>`;
+        });
+        node.parentNode.replaceChild(span, node);
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE') {
+      Array.from(node.childNodes).forEach(walk);
+    }
+  }
+
+  walk(dom.previewMarkdownBody);
+
+  if (dom.searchCount) {
+    dom.searchCount.textContent = `${matchCount} in doc`;
+  }
+
+  const firstHighlight = dom.previewMarkdownBody.querySelector('.highlight-match');
+  if (firstHighlight) {
+    firstHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function countDocsTreeMatches(query) {
+  if (!dom.searchCount) return;
+  if (!query) {
+    dom.searchCount.textContent = '0';
+    return;
+  }
+  const count = dom.docsTree?.querySelectorAll('.tree-file-item').length || 0;
+  dom.searchCount.textContent = `${count} docs`;
+}
+
+function escapeRegex(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Drag and Drop Folder Importer using HTML5 webkitGetAsEntry.
+ */
+export function initDragAndDrop() {
+  if (!dom.docsPane) return;
+
+  ['dragenter', 'dragover'].forEach((name) => {
+    dom.docsPane.addEventListener(name, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dom.docsPane.classList.add('drag-over');
+    });
+  });
+
+  ['dragleave', 'dragend'].forEach((name) => {
+    dom.docsPane.addEventListener(name, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dom.docsPane.classList.remove('drag-over');
+    });
+  });
+
+  dom.docsPane.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dom.docsPane.classList.remove('drag-over');
+
+    const items = e.dataTransfer.items;
+    if (!items || items.length === 0) return;
+
+    showToast('Scanning dropped folders and Markdown files...');
+    const collected = [];
+
+    async function traverseEntry(entry, currentPath = '') {
+      if (entry.isFile) {
+        if (entry.name.toLowerCase().endsWith('.md') || entry.name.toLowerCase().endsWith('.markdown')) {
+          const file = await new Promise((resolve) => entry.file(resolve));
+          const text = await file.text();
+          const docPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+          collected.push({
+            path: docPath,
+            type: 'doc',
+            content: text,
+          });
+        }
+      } else if (entry.isDirectory) {
+        const dirPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        collected.push({
+          path: dirPath,
+          type: 'folder',
+        });
+        const reader = entry.createReader();
+        const readAllEntries = async () => {
+          return new Promise((resolve) => {
+            reader.readEntries(async (entries) => {
+              if (entries.length === 0) {
+                resolve();
+              } else {
+                for (const child of entries) {
+                  await traverseEntry(child, dirPath);
+                }
+                await readAllEntries();
+                resolve();
+              }
+            });
+          });
+        };
+        await readAllEntries();
+      }
+    }
+
+    try {
+      for (let i = 0; i < items.length; i++) {
+        const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+        if (entry) {
+          await traverseEntry(entry);
+        }
+      }
+
+      if (collected.length === 0) {
+        showToast('No Markdown (.md) files found in dropped items');
+        return;
+      }
+
+      showToast(`Importing ${collected.length} items into database...`);
+      const res = await importDocsTree(collected, true);
+      state.docsTree = res.tree || (await fetchDocsTree());
+      renderDocsTree('');
+      showToast(`Imported ${res.created || 0} created, ${res.updated || 0} updated documents!`);
+
+      const firstDoc = collected.find((it) => it.type === 'doc');
+      if (firstDoc) {
+        await selectDoc(firstDoc.path);
+      }
+    } catch (err) {
+      console.error('Drag and drop import failed:', err);
+      showToast(`Import failed: ${err.message}`);
+    }
+  });
+
+  // Clicking dropzone opens standard file dialog fallback
+  if (dom.docsDropzone) {
+    dom.docsDropzone.addEventListener('click', () => {
+      openNewDocModal();
+    });
+  }
+}
+
+export function openNewDocModal(targetFolder = '') {
+  state.editingDocPath = null;
+  if (dom.docModalTitle) dom.docModalTitle.textContent = 'New Document';
+  if (dom.formDocPath) {
+    dom.formDocPath.disabled = false;
+    dom.formDocPath.value = targetFolder ? `${targetFolder}/` : '';
+  }
+  if (dom.formDocTitle) dom.formDocTitle.value = '';
+  if (dom.formDocContent) dom.formDocContent.value = '# Title\n\n';
+  if (dom.formDocTags) dom.formDocTags.value = '';
+  if (dom.docModal) dom.docModal.style.display = 'flex';
+  setTimeout(() => dom.formDocTitle?.focus(), 50);
+}
+
+export async function openEditDocModal(docPath = null) {
+  const target = docPath || state.selectedDocPath;
+  if (!target) return;
+  state.editingDocPath = target;
+  if (dom.docModalTitle) dom.docModalTitle.textContent = 'Edit Document';
+  if (dom.formDocPath) {
+    dom.formDocPath.value = target;
+    dom.formDocPath.disabled = true;
+  }
+
+  let content = state.currentDocContent || '';
+  let title = dom.previewTitle?.textContent || target;
+  let tags = state.currentDocTags || [];
+
+  if (target !== state.selectedDocPath || !content) {
+    try {
+      const data = await fetchDocContent(target);
+      content = data.content || '';
+      title = data.title || target;
+      tags = data.tags || [];
+    } catch (e) {
+      console.error('Failed to fetch doc for editing:', e);
+    }
+  }
+
+  if (dom.formDocTitle) dom.formDocTitle.value = title;
+  if (dom.formDocContent) dom.formDocContent.value = content;
+  if (dom.formDocTags) dom.formDocTags.value = tags.join(', ');
+  if (dom.docModal) dom.docModal.style.display = 'flex';
+  setTimeout(() => dom.formDocContent?.focus(), 50);
+}
+
+export function closeDocModal() {
+  if (dom.docModal) dom.docModal.style.display = 'none';
+  state.editingDocPath = null;
+}
+
+export function openNewFolderModal(targetParent = '') {
+  if (dom.formFolderPath) dom.formFolderPath.value = targetParent ? `${targetParent}/` : '';
+  if (dom.formFolderTitle) dom.formFolderTitle.value = '';
+  if (dom.folderModal) dom.folderModal.style.display = 'flex';
+  setTimeout(() => dom.formFolderPath?.focus(), 50);
+}
+
+export function closeFolderModal() {
+  if (dom.folderModal) dom.folderModal.style.display = 'none';
+}
+
 export function getOrderedDocPaths() {
   const paths = [];
   function collect(items) {
     if (!items || !Array.isArray(items)) return;
     for (const item of items) {
       const p = item.path || item.Path;
-      if (p) paths.push(p);
-      const children = item.children || item.Children;
-      if (children && children.length > 0) {
-        collect(children);
+      if (item.type === 'file' && p) {
+        paths.push(p);
+      }
+      if (item.children && Array.isArray(item.children)) {
+        collect(item.children);
       }
     }
   }
@@ -441,22 +875,26 @@ export function getOrderedDocPaths() {
 
 export function canNavigateDocs(direction) {
   const paths = getOrderedDocPaths();
-  if (paths.length === 0) return false;
-  let idx = paths.indexOf(state.selectedDocPath);
-  if (idx === -1) idx = 0;
-  const targetIdx = idx + direction;
-  return targetIdx >= 0 && targetIdx < paths.length;
+  if (paths.length === 0 || !state.selectedDocPath) return false;
+  const idx = paths.indexOf(state.selectedDocPath);
+  if (idx === -1) return false;
+  if (direction === 'prev') return idx > 0;
+  if (direction === 'next') return idx < paths.length - 1;
+  return false;
 }
 
 export async function navigateDocs(direction) {
   const paths = getOrderedDocPaths();
-  if (paths.length === 0) return false;
-  let idx = paths.indexOf(state.selectedDocPath);
-  if (idx === -1) idx = 0;
-  const targetIdx = idx + direction;
-  if (targetIdx >= 0 && targetIdx < paths.length) {
-    const isMobile = window.innerWidth <= 768;
-    await selectDoc(paths[targetIdx], true, isMobile);
+  if (paths.length === 0 || !state.selectedDocPath) return false;
+  const idx = paths.indexOf(state.selectedDocPath);
+  if (idx === -1) return false;
+
+  let targetIdx = idx;
+  if (direction === 'prev' && idx > 0) targetIdx--;
+  if (direction === 'next' && idx < paths.length - 1) targetIdx++;
+
+  if (targetIdx !== idx) {
+    await selectDoc(paths[targetIdx], true);
     return true;
   }
   return false;
@@ -464,14 +902,10 @@ export async function navigateDocs(direction) {
 
 export function getAdjacentDocTitle(direction) {
   const paths = getOrderedDocPaths();
-  if (paths.length === 0) return null;
-  let idx = paths.indexOf(state.selectedDocPath);
-  if (idx === -1) idx = 0;
-  const targetIdx = idx + direction;
-  if (targetIdx >= 0 && targetIdx < paths.length) {
-    const p = paths[targetIdx];
-    const parts = p.split('/');
-    return parts[parts.length - 1];
-  }
+  if (paths.length === 0 || !state.selectedDocPath) return null;
+  const idx = paths.indexOf(state.selectedDocPath);
+  if (idx === -1) return null;
+  if (direction === 'prev' && idx > 0) return paths[idx - 1];
+  if (direction === 'next' && idx < paths.length - 1) return paths[idx + 1];
   return null;
 }

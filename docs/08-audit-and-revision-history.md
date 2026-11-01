@@ -54,19 +54,47 @@ Defined in [db/schema.sql](file:///e:/kb-cli/kb-cli/db/schema.sql) and replicate
 ```sql
 CREATE TABLE IF NOT EXISTS audit_logs (
     id              TEXT PRIMARY KEY,
-    entity_type     TEXT NOT NULL,               -- 'note' or 'daily_log'
+    entity_type     TEXT NOT NULL,               -- 'note', 'daily_log', or plugin entity type
     entity_id       TEXT NOT NULL,               -- Foreign ID of target entity
     action          TEXT NOT NULL,               -- 'created' | 'updated' | 'deleted' | 'restored' | 'promoted'
     changes_summary TEXT,                        -- Human-readable change summary
     snapshot_json   TEXT,                        -- Full point-in-time JSON payload
-    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Migration v2 Plugin Extensions:
+    plugin_id       TEXT DEFAULT 'core',
+    revision        INTEGER DEFAULT 1,
+    actor_type      TEXT DEFAULT 'user',         -- 'user' | 'plugin' | 'ai' | 'system'
+    actor_id        TEXT,
+    request_id      TEXT,
+    before_revision TEXT,
+    after_revision  TEXT,
+    diff_json       TEXT DEFAULT '{}'
 );
 
 -- Fast entity revision timeline lookup (ordered reverse chronologically)
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_plugin_entity ON audit_logs(plugin_id, entity_type, entity_id, created_at DESC);
 
 -- Fast global activity stream lookup
 CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_logs(created_at DESC);
+```
+
+### 3.2 Dedicated `entity_revisions` Table (`db/migrations.go`)
+For universal plugin entities, full serialized state snapshots are stored in a dedicated, high-performance table:
+```sql
+CREATE TABLE IF NOT EXISTS entity_revisions (
+    revision_id     TEXT PRIMARY KEY,
+    plugin_id       TEXT NOT NULL,
+    entity_type     TEXT NOT NULL,
+    entity_id       TEXT NOT NULL,
+    revision        INTEGER NOT NULL,
+    schema_version  INTEGER NOT NULL,
+    snapshot_json   TEXT NOT NULL,
+    created_at      DATETIME NOT NULL,
+    UNIQUE (plugin_id, entity_type, entity_id, revision)
+);
+
+CREATE INDEX IF NOT EXISTS idx_revisions_entity ON entity_revisions(plugin_id, entity_type, entity_id, revision DESC);
 ```
 
 ### 3.2 Go Domain Models ([models/audit.go](file:///e:/kb-cli/kb-cli/models/audit.go))
@@ -212,3 +240,11 @@ The synchronization engine ([sync/postgres.go](file:///e:/kb-cli/kb-cli/sync/pos
 - Pulls remote audit records using timestamp watermarking (`created_at > last_synced_at`).
 - Pushes local audit entries in batches of 50.
 - Uses `ON CONFLICT (id) DO NOTHING` because audit IDs are globally unique UUIDs and audit logs are strictly immutable.
+
+### 7.4 Plugin Subsystem Auditing & Time Travel
+External plugins running over JSON-RPC share the same auditing foundations as core notes:
+- **Automatic Snapshots:** Every call to `EntryStore.Create`, `Update`, or `Delete` atomically records an incrementing `revision` and writes the payload to `entity_revisions`.
+- **Structured Audit Trails:** An audit row with `plugin_id`, `entity_type`, `actor_type`, and `diff_json` is committed in the same SQLite transaction.
+- **AI Agent Attribution:** Mutations initiated by AI assistants through plugin MCP tools are tagged with `actor_type: "ai"` and `actor_id: "mcp_agent"`.
+- **Lossless Recovery:** Plugin entries can be queried and rolled back to any previous revision, preventing data loss in external domain tools.
+

@@ -101,6 +101,30 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS doc_nodes (
+  id VARCHAR(64) PRIMARY KEY,
+  parent_id VARCHAR(64) REFERENCES doc_nodes(id) ON DELETE CASCADE,
+  type VARCHAR(16) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  slug VARCHAR(255) NOT NULL,
+  path TEXT NOT NULL UNIQUE,
+  content TEXT,
+  content_type VARCHAR(64) NOT NULL DEFAULT 'text/markdown',
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  deleted_at TIMESTAMPTZ,
+  deleted_note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS doc_tags (
+  doc_id VARCHAR(64) NOT NULL REFERENCES doc_nodes(id) ON DELETE CASCADE,
+  tag_id VARCHAR(64) NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (doc_id, tag_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_pg_notes_deleted_at ON notes(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_pg_notes_updated_at ON notes(updated_at);
 CREATE INDEX IF NOT EXISTS idx_pg_notes_type ON notes(type);
@@ -109,6 +133,12 @@ CREATE INDEX IF NOT EXISTS idx_pg_daily_logs_created_at ON daily_logs(created_at
 CREATE INDEX IF NOT EXISTS idx_pg_links_from_to ON links(from_note, to_note);
 CREATE INDEX IF NOT EXISTS idx_pg_audit_entity ON audit_logs(entity_type, entity_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pg_audit_created_at ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pg_doc_nodes_parent ON doc_nodes(parent_id, order_index);
+CREATE INDEX IF NOT EXISTS idx_pg_doc_nodes_path ON doc_nodes(path);
+CREATE INDEX IF NOT EXISTS idx_pg_doc_nodes_updated_at ON doc_nodes(updated_at);
+CREATE INDEX IF NOT EXISTS idx_pg_doc_nodes_deleted_at ON doc_nodes(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_pg_doc_tags_tag ON doc_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_pg_doc_tags_doc ON doc_tags(doc_id);
 `
 
 // NewPostgresClient creates and connects to a remote PostgreSQL database.

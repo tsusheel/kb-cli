@@ -22,10 +22,13 @@ import {
   fetchNoteDetail,
   updateNoteStatus,
   deleteNote,
+  deleteDoc,
+  fetchDocContent,
   triggerSync,
 } from './api.js';
 import { renderMarkdown, applyPostMarkdownEnhancements } from './markdown.js';
 import { openNoteModal, closeNoteModal } from './modal.js';
+import { handleDocsSearch, openEditDocModal, renderDocsTree } from './docs.js';
 
 export function showMobileDetail() {
   if (window.innerWidth <= 768 && dom.appContainer) {
@@ -58,18 +61,20 @@ export async function loadData() {
   }
 }
 
-export async function loadTags() {
+export async function loadTags(scope = null) {
   try {
-    const tags = await fetchTags();
+    const effectiveScope = scope || (state.currentViewMode === 'docs' ? 'docs' : 'notes');
+    const tags = await fetchTags(effectiveScope);
     if (!dom.tagPills) return;
     if (!tags || tags.length === 0) {
       dom.tagPills.innerHTML = '';
       return;
     }
+    const currentActiveTag = state.currentViewMode === 'docs' ? state.activeDocTagFilter : state.activeTagFilter;
     dom.tagPills.innerHTML = tags
       .map(
         (t) => `
-        <button class="tag-chip ${state.activeTagFilter === t.name ? 'active' : ''}" data-tag="${escapeHtml(t.name)}">
+        <button class="tag-chip ${currentActiveTag === t.name ? 'active' : ''}" data-tag="${escapeHtml(t.name)}">
           #${escapeHtml(t.name)} (${t.count})
         </button>
       `
@@ -93,7 +98,7 @@ export async function loadStats() {
 }
 
 export function updateCounts() {
-  const counts = { all: 0, note: 0, todo: 0, project: 0, idea: 0, log: 0, archived: 0 };
+  const counts = { all: 0, note: 0, todo: 0, project: 0, idea: 0, log: 0, doc: 0, archived: 0 };
   state.allItems.forEach((item) => {
     if (item.deleted_at) {
       counts.archived++;
@@ -101,6 +106,8 @@ export function updateCounts() {
       counts.all++;
       if (item.is_log) {
         counts.log++;
+      } else if (item.type === 'doc' || item.is_doc) {
+        counts.doc++;
       } else {
         const t = (item.type || 'note').toLowerCase();
         if (counts[t] !== undefined) counts[t]++;
@@ -119,6 +126,7 @@ export function updateCounts() {
   setElText('count-project', counts.project);
   setElText('count-idea', counts.idea);
   setElText('count-log', counts.log);
+  setElText('count-doc', counts.doc);
   setElText('count-archived', counts.archived);
 }
 
@@ -265,14 +273,42 @@ export async function selectItem(index, scroll = true) {
   renderPreviewBasic(item);
 
   if (!item.is_log) {
-    try {
-      state.currentNoteDetail = await fetchNoteDetail(item.id);
-      if (state.filteredItems[state.selectedIndex]?.id === item.id) {
-        renderPreviewDetail(state.currentNoteDetail);
-        scrollPreviewToTop();
+    if (item.type === 'doc' || item.is_doc) {
+      try {
+        const docData = await fetchDocContent(item.doc_path || item.id);
+        if (state.filteredItems[state.selectedIndex]?.id === item.id) {
+          state.currentDocContent = docData.content;
+          state.currentDocTags = docData.tags || [];
+          if (dom.previewRawBody) dom.previewRawBody.textContent = docData.content;
+          if (dom.previewMarkdownBody) {
+            dom.previewMarkdownBody.innerHTML = renderMarkdown(docData.content);
+            applyPostMarkdownEnhancements(dom.previewMarkdownBody);
+          }
+          if (dom.previewTagsRow) {
+            if (docData.tags && docData.tags.length > 0) {
+              dom.previewTagsRow.innerHTML = docData.tags
+                .map((t) => `<span class="preview-tag-chip" data-tag="${escapeHtml(t)}">#${escapeHtml(t)}</span>`)
+                .join('');
+              dom.previewTagsRow.style.display = 'flex';
+            } else {
+              dom.previewTagsRow.innerHTML = '';
+            }
+          }
+          scrollPreviewToTop();
+        }
+      } catch (err) {
+        console.error('Error fetching doc content in notes preview:', err);
       }
-    } catch (err) {
-      console.error('Error fetching note detail:', err);
+    } else {
+      try {
+        state.currentNoteDetail = await fetchNoteDetail(item.id);
+        if (state.filteredItems[state.selectedIndex]?.id === item.id) {
+          renderPreviewDetail(state.currentNoteDetail);
+          scrollPreviewToTop();
+        }
+      } catch (err) {
+        console.error('Error fetching note detail:', err);
+      }
     }
   }
 }
@@ -323,9 +359,9 @@ export function renderPreviewBasic(item) {
   if (dom.previewEmpty) dom.previewEmpty.style.display = 'none';
   if (dom.previewContent) dom.previewContent.style.display = 'block';
 
-  if (dom.previewTitle) dom.previewTitle.textContent = item.display;
+  const isDoc = item.type === 'doc' || item.is_doc;
   if (dom.previewShortId) {
-    dom.previewShortId.textContent = item.short_id || item.id.substring(0, 7);
+    dom.previewShortId.textContent = isDoc ? 'DOC' : (item.short_id || item.id.substring(0, 7));
   }
 
   const type = item.is_log ? 'log' : item.type || 'note';
@@ -337,6 +373,7 @@ export function renderPreviewBasic(item) {
   if (dom.previewStatusBadge) {
     dom.previewStatusBadge.textContent = item.status || (item.is_log ? 'recorded' : 'active');
     dom.previewStatusBadge.className = `status-badge ${item.status === 'completed' ? 'status-completed' : ''}`;
+    dom.previewStatusBadge.style.display = isDoc ? 'none' : 'inline-block';
   }
 
   if (dom.previewAreaBadge) {
@@ -378,7 +415,7 @@ export function renderPreviewBasic(item) {
   if (dom.toggleStatusBtn) {
     dom.toggleStatusBtn.textContent = item.status === 'completed' ? 'Reopen' : 'Done';
     dom.toggleStatusBtn.style.display =
-      item.type === 'todo' || item.type === 'project' ? 'inline-flex' : 'none';
+      !isDoc && (item.type === 'todo' || item.type === 'project') ? 'inline-flex' : 'none';
   }
   if (dom.editNoteBtn) {
     dom.editNoteBtn.style.display = item.is_log ? 'none' : 'inline-flex';
@@ -494,6 +531,20 @@ export async function deleteCurrentItem() {
   const item = state.filteredItems[state.selectedIndex];
   if (!item) return;
 
+  if (item.type === 'doc' || item.is_doc) {
+    if (!confirm(`Are you sure you want to delete doc "${item.display || item.doc_path}"?`)) return;
+    try {
+      await deleteDoc(item.doc_path || item.id);
+      showToast('Document deleted');
+      showMobileList();
+      await loadData();
+      await loadTags();
+    } catch (err) {
+      showToast(`Delete failed: ${err.message}`);
+    }
+    return;
+  }
+
   if (!confirm(`Are you sure you want to soft-delete "${item.display}"?`)) return;
 
   try {
@@ -501,6 +552,7 @@ export async function deleteCurrentItem() {
     showToast('Note soft-deleted');
     showMobileList();
     await loadData();
+    await loadTags();
   } catch (err) {
     showToast(`Delete failed: ${err.message}`);
   }
@@ -616,7 +668,11 @@ export function handleGlobalKeydown(e) {
       e.preventDefault();
       const item = state.filteredItems[state.selectedIndex];
       if (item && !item.is_log) {
-        openNoteModal(item);
+        if (item.type === 'doc' || item.is_doc) {
+          openEditDocModal(item.doc_path || item.id);
+        } else {
+          openNoteModal(item);
+        }
       }
     }
   }
@@ -725,7 +781,7 @@ export function setupFinderListeners() {
     dom.appContainer.classList.add('mobile-search-open');
     const isDocs = state.currentViewMode === 'docs';
     dom.mobileSearchInput.placeholder = isDocs ? 'Search documentation...' : 'Search notes & tasks...';
-    dom.mobileSearchInput.value = isDocs ? (dom.docsSearchInput?.value || '') : (dom.searchInput?.value || '');
+    dom.mobileSearchInput.value = dom.searchInput?.value || '';
     isMobileSearchFocused = true;
     setMobileSearchButtonState('done');
 
@@ -763,16 +819,9 @@ export function setupFinderListeners() {
     if (dom.mobileSearchInput) {
       dom.mobileSearchInput.value = '';
     }
-    if (state.currentViewMode === 'docs') {
-      if (dom.docsSearchInput) {
-        dom.docsSearchInput.value = '';
-        dom.docsSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    } else {
-      if (dom.searchInput) {
-        dom.searchInput.value = '';
-        dom.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-      }
+    if (dom.searchInput) {
+      dom.searchInput.value = '';
+      dom.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
     closeMobileSearch();
   }
@@ -860,16 +909,9 @@ export function setupFinderListeners() {
       } else {
         setMobileSearchButtonState(val.trim() ? 'clear' : 'done');
       }
-      if (state.currentViewMode === 'docs') {
-        if (dom.docsSearchInput) {
-          dom.docsSearchInput.value = val;
-          dom.docsSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      } else {
-        if (dom.searchInput) {
-          dom.searchInput.value = val;
-          dom.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-        }
+      if (dom.searchInput) {
+        dom.searchInput.value = val;
+        dom.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
       }
     });
   }
@@ -878,6 +920,10 @@ export function setupFinderListeners() {
     dom.searchInput.addEventListener('input', () => {
       if (dom.clearSearchBtn) {
         dom.clearSearchBtn.style.display = dom.searchInput.value ? 'block' : 'none';
+      }
+      if (state.currentViewMode === 'docs') {
+        handleDocsSearch(dom.searchInput.value);
+        return;
       }
       filterAndRender();
     });
@@ -889,6 +935,10 @@ export function setupFinderListeners() {
         dom.searchInput.value = '';
         dom.clearSearchBtn.style.display = 'none';
         dom.searchInput.focus();
+      }
+      if (state.currentViewMode === 'docs') {
+        handleDocsSearch('');
+        return;
       }
       filterAndRender();
     });
@@ -912,15 +962,48 @@ export function setupFinderListeners() {
       const chip = e.target.closest('.tag-chip');
       if (!chip) return;
       const tag = chip.dataset.tag;
-      if (state.activeTagFilter === tag) {
-        state.activeTagFilter = null;
-        chip.classList.remove('active');
+      if (state.currentViewMode === 'docs') {
+        if (state.activeDocTagFilter === tag) {
+          state.activeDocTagFilter = null;
+          chip.classList.remove('active');
+        } else {
+          document.querySelectorAll('.tag-chip').forEach((c) => c.classList.remove('active'));
+          state.activeDocTagFilter = tag;
+          chip.classList.add('active');
+        }
+        renderDocsTree(dom.searchInput?.value || '');
       } else {
-        document.querySelectorAll('.tag-chip').forEach((c) => c.classList.remove('active'));
-        state.activeTagFilter = tag;
-        chip.classList.add('active');
+        if (state.activeTagFilter === tag) {
+          state.activeTagFilter = null;
+          chip.classList.remove('active');
+        } else {
+          document.querySelectorAll('.tag-chip').forEach((c) => c.classList.remove('active'));
+          state.activeTagFilter = tag;
+          chip.classList.add('active');
+        }
+        filterAndRender();
       }
-      filterAndRender();
+    });
+  }
+
+  if (dom.previewTagsRow) {
+    dom.previewTagsRow.addEventListener('click', (e) => {
+      const chip = e.target.closest('.preview-tag-chip');
+      if (!chip) return;
+      const tag = chip.dataset.tag;
+      if (state.currentViewMode === 'docs') {
+        state.activeDocTagFilter = tag;
+        document.querySelectorAll('.tag-chip').forEach((c) => {
+          c.classList.toggle('active', c.dataset.tag === tag);
+        });
+        renderDocsTree(dom.searchInput?.value || '');
+      } else {
+        state.activeTagFilter = tag;
+        document.querySelectorAll('.tag-chip').forEach((c) => {
+          c.classList.toggle('active', c.dataset.tag === tag);
+        });
+        filterAndRender();
+      }
     });
   }
 
@@ -992,7 +1075,11 @@ export function setupFinderListeners() {
     dom.editNoteBtn.addEventListener('click', () => {
       const item = state.filteredItems[state.selectedIndex];
       if (item && !item.is_log) {
-        openNoteModal(item);
+        if (item.type === 'doc' || item.is_doc) {
+          openEditDocModal(item.doc_path || item.id);
+        } else {
+          openNoteModal(item);
+        }
       }
     });
   }

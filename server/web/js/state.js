@@ -20,5 +20,8 @@ export const state = {
   currentDocContent: null,
   docsCache: new Map(),
   docsExpandedFolders: new Set(['docs', 'proposals']),
+  activeDocTagFilter: null,
+  currentDocTags: [],
+  editingDocPath: null,
 };
 

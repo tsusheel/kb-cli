@@ -25,6 +25,7 @@ graph TD
         Docs["<b>docs.js</b><br/>Docs Tree Viewer"]
         Modal["<b>modal.js</b><br/>Note Editor Dialogs"]
         Auth["<b>auth.js</b><br/>Auth Gateway & PIN"]
+        Plugins["<b>plugins.js & plugin-host.js</b><br/>Web Plugin Host & Routing"]
     end
 
     subgraph S3["3. Content Rendering Engines"]
@@ -45,6 +46,7 @@ graph TD
     App --> Modal
     App --> Auth
     App --> PWA
+    App --> Plugins
 
     Finder --> Markdown
     Docs --> Markdown
@@ -55,6 +57,7 @@ graph TD
     Modal -.-> API
     Finder -.-> API
     Docs -.-> API
+    Plugins -.-> API
 ```
 
 ### 2.1 Application Entrypoint (`app.js`)
@@ -174,3 +177,21 @@ The Service Worker intercepts all static asset requests using a **Cache-First st
 ### 6.3 App Installation (`site.webmanifest`)
 - Configured with `display: standalone` and `theme_color: #0d1117`.
 - Removes browser address bars and navigation chrome when installed on iOS or Android, providing a native application experience.
+
+---
+
+## 7. Web Plugin Host Architecture (`plugins.js` & `plugin-host.js`)
+
+The web frontend includes a modular runtime host for discovering and rendering plugin views within the Single-Page Application:
+
+### 7.1 Plugin Discovery & Dynamic Registration
+1. On startup, `pluginsManager.init()` queries `GET /api/plugins` to discover active plugins.
+2. For each enabled plugin, the manager registers client routes matching `#/plugins/:id`.
+3. The SPA listens to window `hashchange` events and delegates matching paths to `pluginHost.dispatchRoute(hash)`.
+
+### 7.2 Sandboxed UI Mount Points
+Plugins can mount custom views inside the SPA container:
+- Dynamic tab creation alongside "Notes" and "Docs".
+- Dedicated full-width viewports for domain UIs (e.g., `/gym` workout logger or ThingsPad console).
+- Scoped REST API communication (`/api/plugins/{id}/entries`) with CSRF protection and session validation.
+

@@ -52,9 +52,9 @@ export const dom = {
   // Docs Pane Elements
   docsPane: document.getElementById('docs-pane'),
   docsTree: document.getElementById('docs-tree'),
-  docsSearchInput: document.getElementById('docs-search-input'),
   docsBreadcrumb: document.getElementById('docs-breadcrumb'),
   docsBreadcrumbPath: document.getElementById('docs-breadcrumb-path'),
+  docsDropzone: document.getElementById('docs-dropzone'),
   resultsPane: document.getElementById('results-pane'),
   filterBar: document.querySelector('.filter-bar'),
 
@@ -65,6 +65,8 @@ export const dom = {
 
   // Header Actions
   newNoteBtn: document.getElementById('new-note-btn'),
+  newDocBtn: document.getElementById('new-doc-btn'),
+  newFolderBtn: document.getElementById('new-folder-btn'),
   syncBtn: document.getElementById('sync-btn'),
   offlineBadge: document.getElementById('offline-badge'),
 
@@ -74,6 +76,8 @@ export const dom = {
   toggleStatusBtn: document.getElementById('toggle-status-btn'),
   editNoteBtn: document.getElementById('edit-note-btn'),
   deleteNoteBtn: document.getElementById('delete-note-btn'),
+  editDocBtn: document.getElementById('edit-doc-btn'),
+  deleteDocBtn: document.getElementById('delete-doc-btn'),
 
   // Note Modal Elements
   noteModal: document.getElementById('note-modal'),
@@ -104,4 +108,26 @@ export const dom = {
   togglePasswordBtn: document.getElementById('toggle-password-btn'),
   authError: document.getElementById('auth-error'),
   authSubmitBtn: document.getElementById('auth-submit-btn'),
+
+  // Doc Modal Elements
+  docModal: document.getElementById('doc-modal'),
+  docForm: document.getElementById('doc-form'),
+  docModalTitle: document.getElementById('doc-modal-title'),
+  docModalCloseBtn: document.getElementById('doc-modal-close-btn'),
+  docModalCancelBtn: document.getElementById('doc-modal-cancel-btn'),
+  docModalTabWrite: document.getElementById('doc-modal-tab-write'),
+  docModalTabPreview: document.getElementById('doc-modal-tab-preview'),
+  docModalContentPreview: document.getElementById('doc-modal-content-preview'),
+  formDocPath: document.getElementById('form-doc-path'),
+  formDocTitle: document.getElementById('form-doc-title'),
+  formDocTags: document.getElementById('form-doc-tags'),
+  formDocContent: document.getElementById('form-doc-content'),
+
+  // Folder Modal Elements
+  folderModal: document.getElementById('folder-modal'),
+  folderForm: document.getElementById('folder-form'),
+  folderModalCloseBtn: document.getElementById('folder-modal-close-btn'),
+  folderModalCancelBtn: document.getElementById('folder-modal-cancel-btn'),
+  formFolderPath: document.getElementById('form-folder-path'),
+  formFolderTitle: document.getElementById('form-folder-title'),
 };

@@ -381,3 +381,61 @@ PostgreSQL connection strings should never contain hardcoded plaintext credentia
      sslmode: "require"
    ```
 3. At runtime, `kb-cli` reads the host and user from `config.yaml`, queries the OS Keyring via `zalando/go-keyring` for `postgres_password`, and assembles the DSN in memory without writing it to disk.
+
+---
+
+## 11. Multi-Plugin Synchronization Architecture (`sync/coordinator.go`)
+
+With the introduction of the multi-plugin platform, `kb-cli` employs a dual-tier replication model:
+
+```mermaid
+graph TB
+    subgraph CoreSync ["Tier 1: Core Note Sync (sync/postgres.go)"]
+        Watermark["Timestamp Watermark (sync_state.last_synced_at)"]
+        CoreTables["notes, tags, links, daily_logs, audit_logs"]
+    end
+
+    subgraph PluginSync ["Tier 2: Plugin Outbox Sync (sync/coordinator.go)"]
+        OutboxQueue["Transactional Outbox (sync_outbox)"]
+        CursorStore["Stream Cursors (sync_cursors)"]
+        AdapterReg["Adapter Registry (sync/adapter.go)"]
+    end
+
+    subgraph RemotePG ["Remote PostgreSQL Database"]
+        PGCore["Core Tables (notes, tags, links...)"]
+        PGPlugins["Plugin Tables (plugins, plugin_entries, entity_revisions)"]
+    end
+
+    CoreTables <-->|Incremental Watermark Reconciliation| PGCore
+    OutboxQueue -->|Push Pending Changes| PGPlugins
+    PGPlugins -->|Pull via Stream Cursor| AdapterReg
+    AdapterReg -->|LWW Conflict Resolution| PluginSync
+```
+
+### 11.1 Transactional Outbox Pattern (`sync_outbox`)
+Whenever an external plugin writes or deletes an entry via `EntryStore`, the mutation and an outbox record are committed within the same atomic SQLite transaction:
+- **`operation`**: `'upsert'` or `'tombstone'`.
+- **`base_version` & `entity_version`**: For optimistic concurrency tracking.
+- **`payload_json`**: Complete serialized snapshot of the entity.
+- **`acknowledged_at`**: Timestamp set once the remote PostgreSQL database confirms persistence.
+
+### 11.2 Conflict Resolution & Sync Adapters (`api.SyncAdapter`)
+The `AdapterRegistry` allows plugins to register customized reconciliation logic:
+```go
+type SyncAdapter interface {
+    PluginID() string
+    EntityType() string
+    ConflictPolicy() ConflictPolicy
+    Serialize(entry *Entry) ([]byte, error)
+    Deserialize(data []byte) (*Entry, error)
+    ResolveConflict(local, remote *Change) (*Change, error)
+}
+```
+If no custom adapter is provided, the coordinator falls back to `UniversalEntriesAdapter`, which resolves concurrent edits using standard **Last-Write-Wins (LWW)** based on entity `updated_at` timestamps.
+
+### 11.3 Remote PostgreSQL Plugin Schema
+When connecting to PostgreSQL, `SyncCoordinator` ensures that the remote plugin tables exist:
+- **`plugins`**: Mirrors plugin registry metadata and manifests.
+- **`plugin_entries`**: Polymorphic document table with `jsonb` payloads and indexes matching SQLite.
+- **`entity_revisions`**: Immutable revision history for point-in-time recovery across devices.
+

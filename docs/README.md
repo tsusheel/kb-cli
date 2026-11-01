@@ -16,11 +16,13 @@ This directory contains the authoritative architecture documentation and technic
 | [**06. Model Context Protocol Server**](./06-mcp-server.md) | **AI Agent Connectivity** | Native MCP server implementation over `stdio` providing 12 tools for autonomous agent interaction with audit logging. |
 | [**07. Configuration & Security**](./07-configuration-and-security.md) | **Config & Secrets** | Viper configuration (`config.yaml`), path resolution, and hardware-encrypted OS Keyring password management. |
 | [**08. Audit & Revision History**](./08-audit-and-revision-history.md) | **Audit & Time Travel** | Immutable snapshot logs, automated diff engine, atomic rollback/reversion, and AI attribution trail. |
+| [**09. Multi-Plugin Platform Architecture**](./09-plugin-system.md) | **Plugin Extensibility** | Out-of-process JSON-RPC plugin runner, public Go SDK, capability security model, universal polymorphic storage, and dynamic MCP/Web mounting. |
 
 ---
 
 ## Future Architecture & Extension Proposals
 
-For architectural plans and specifications regarding upcoming features that are **not yet implemented in the core app** (such as the Plugin Architecture, Universal Entry Store, ThingsPad mobile command console, and Gym logging plugin), see the dedicated proposals directory:
+For architectural plans and specifications regarding upcoming features and external ecosystem plugins (such as the ThingsPad mobile command console and the external Gym logging plugin repository), see the proposals directory:
 
-👉 [**docs/proposals/ (Plugin Architecture & ThingsPad Specifications)**](./proposals/README.md)
+👉 [**docs/proposals/ (Extension Proposals & Plugin Guides)**](./proposals/README.md)
+

@@ -293,5 +293,70 @@ func TestServerAPIRoutes(t *testing.T) {
 	if !ok || len(contentStr) == 0 {
 		t.Errorf("expected non-empty doc content in response")
 	}
+
+	// 13. Test POST /api/docs/folders (create folder)
+	folderBody := bytes.NewBufferString(`{"path":"engineering/backend","title":"Backend Engineering"}`)
+	reqFolder := httptest.NewRequest(http.MethodPost, "/api/docs/folders", folderBody)
+	recFolder := httptest.NewRecorder()
+	handler.ServeHTTP(recFolder, reqFolder)
+	if recFolder.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for POST /api/docs/folders, got %d: %s", recFolder.Code, recFolder.Body.String())
+	}
+
+	// 14. Test POST /api/docs (create document)
+	docBody := bytes.NewBufferString(`{"path":"engineering/backend/api-spec.md","title":"API Specification","content":"# API Spec\nEndpoints here."}`)
+	reqCreateDoc := httptest.NewRequest(http.MethodPost, "/api/docs", docBody)
+	recCreateDoc := httptest.NewRecorder()
+	handler.ServeHTTP(recCreateDoc, reqCreateDoc)
+	if recCreateDoc.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for POST /api/docs, got %d: %s", recCreateDoc.Code, recCreateDoc.Body.String())
+	}
+
+	// 15. Test PUT /api/docs/content (update doc)
+	docUpdateBody := bytes.NewBufferString(`{"path":"engineering/backend/api-spec.md","title":"Updated API Spec","content":"# Updated API Spec\nNew endpoints."}`)
+	reqUpdateDoc := httptest.NewRequest(http.MethodPut, "/api/docs/content", docUpdateBody)
+	recUpdateDoc := httptest.NewRecorder()
+	handler.ServeHTTP(recUpdateDoc, reqUpdateDoc)
+	if recUpdateDoc.Code != http.StatusOK {
+		t.Fatalf("expected 200 for PUT /api/docs/content, got %d: %s", recUpdateDoc.Code, recUpdateDoc.Body.String())
+	}
+
+	// 16. Test GET /api/docs/search (search docs)
+	reqSearchDocs := httptest.NewRequest(http.MethodGet, "/api/docs/search?q=endpoints", nil)
+	recSearchDocs := httptest.NewRecorder()
+	handler.ServeHTTP(recSearchDocs, reqSearchDocs)
+	if recSearchDocs.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET /api/docs/search, got %d: %s", recSearchDocs.Code, recSearchDocs.Body.String())
+	}
+	var searchResults []map[string]interface{}
+	if err := json.Unmarshal(recSearchDocs.Body.Bytes(), &searchResults); err != nil {
+		t.Fatalf("failed to parse doc search results: %v", err)
+	}
+	if len(searchResults) == 0 {
+		t.Errorf("expected search results for 'endpoints', got 0")
+	}
+
+	// 17. Test POST /api/docs/import-tree (batch import)
+	batchImportBody := bytes.NewBufferString(`{
+		"items": [
+			{"path": "guides/sub1/sub2", "type": "folder"},
+			{"path": "guides/sub1/sub2/deep.md", "type": "doc", "title": "Deep Nested Doc", "content": "# Deep Doc\nContent."}
+		],
+		"overwrite": true
+	}`)
+	reqBatch := httptest.NewRequest(http.MethodPost, "/api/docs/import-tree", batchImportBody)
+	recBatch := httptest.NewRecorder()
+	handler.ServeHTTP(recBatch, reqBatch)
+	if recBatch.Code != http.StatusOK {
+		t.Fatalf("expected 200 for POST /api/docs/import-tree, got %d: %s", recBatch.Code, recBatch.Body.String())
+	}
+
+	// 18. Test DELETE /api/docs (delete doc)
+	reqDeleteDoc := httptest.NewRequest(http.MethodDelete, "/api/docs?path=engineering/backend/api-spec.md", nil)
+	recDeleteDoc := httptest.NewRecorder()
+	handler.ServeHTTP(recDeleteDoc, reqDeleteDoc)
+	if recDeleteDoc.Code != http.StatusOK {
+		t.Fatalf("expected 200 for DELETE /api/docs, got %d: %s", recDeleteDoc.Code, recDeleteDoc.Body.String())
+	}
 }
 

@@ -73,6 +73,16 @@ func RunMigrations(targetDB *sql.DB) error {
 			Name:    "multi_plugin_platform_v1",
 			Run:     migrationV2PluginPlatform,
 		},
+		{
+			Version: 3,
+			Name:    "flexible_docs_tree_v1",
+			Run:     migrationV3DocsTree,
+		},
+		{
+			Version: 4,
+			Name:    "flexible_docs_tags_v1",
+			Run:     migrationV4DocTags,
+		},
 	}
 
 	for _, m := range migrations {
@@ -277,6 +287,68 @@ func migrationV2PluginPlatform(tx *sql.Tx) error {
 
 	_, _ = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_plugin_entity ON audit_logs(plugin_id, entity_type, entity_id, created_at DESC);`)
 
+	return nil
+}
+
+func migrationV3DocsTree(tx *sql.Tx) error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS doc_nodes (
+			id            TEXT PRIMARY KEY,
+			parent_id     TEXT,
+			type          TEXT NOT NULL CHECK (type IN ('folder', 'doc')),
+			name          TEXT NOT NULL,
+			title         TEXT NOT NULL,
+			slug          TEXT NOT NULL,
+			path          TEXT NOT NULL UNIQUE,
+			content       TEXT,
+			content_type  TEXT NOT NULL DEFAULT 'text/markdown',
+			order_index   INTEGER NOT NULL DEFAULT 0,
+			created_at    DATETIME NOT NULL,
+			updated_at    DATETIME NOT NULL,
+			deleted_at    DATETIME,
+			deleted_note  TEXT,
+			FOREIGN KEY (parent_id) REFERENCES doc_nodes(id) ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_doc_nodes_parent ON doc_nodes(parent_id, order_index);`,
+		`CREATE INDEX IF NOT EXISTS idx_doc_nodes_path ON doc_nodes(path);`,
+		`CREATE INDEX IF NOT EXISTS idx_doc_nodes_type ON doc_nodes(type);`,
+		`CREATE INDEX IF NOT EXISTS idx_doc_nodes_deleted ON doc_nodes(deleted_at);`,
+		`CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(
+			doc_id UNINDEXED,
+			path,
+			title,
+			content,
+			tokenize = 'unicode61'
+		);`,
+	}
+
+	for _, q := range queries {
+		if _, err := tx.Exec(q); err != nil {
+			return fmt.Errorf("failed executing migration v3 query: %w\nQuery: %s", err, q)
+		}
+	}
+	return nil
+}
+
+func migrationV4DocTags(tx *sql.Tx) error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS doc_tags (
+			doc_id     TEXT NOT NULL,
+			tag_id     TEXT NOT NULL,
+			created_at DATETIME NOT NULL,
+			PRIMARY KEY (doc_id, tag_id),
+			FOREIGN KEY (doc_id) REFERENCES doc_nodes(id) ON DELETE CASCADE,
+			FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_doc_tags_tag ON doc_tags(tag_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_doc_tags_doc ON doc_tags(doc_id);`,
+	}
+
+	for _, q := range queries {
+		if _, err := tx.Exec(q); err != nil {
+			return fmt.Errorf("failed executing migration v4 query: %w\nQuery: %s", err, q)
+		}
+	}
 	return nil
 }
 

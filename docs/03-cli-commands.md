@@ -111,6 +111,15 @@ kb [thought] (positional capture: saves note with status='raw' in <25ms)
 │   ├── -t, --tree                     Display complete CLI command hierarchy and option tree
 │   └── -w, --web                      Open documentation in default web browser
 │
+├── plugin                             Manage external and built-in plugins (plugins)
+│   ├── list                           List all discovered and installed plugins
+│   ├── install <path>                 Install an external plugin binary
+│   ├── enable <id>                    Enable a plugin
+│   ├── disable <id>                   Disable a plugin
+│   ├── grant <id> <cap>               Grant a capability to a plugin (storage.entries, audit.write, etc.)
+│   ├── revoke <id> <cap>              Revoke a capability from a plugin
+│   └── doctor <id>                    Run diagnostic health check on a plugin
+│
 └── completion <shell>                 Generate shell completion scripts (bash, zsh, fish, powershell)
 ```
 
@@ -484,4 +493,63 @@ kb doc -t
 kb docs --web
 kb docs sync -w
 ```
+
+---
+
+## 15. Plugin Management (`kb plugin` / `kb plugins`)
+
+Manage, inspect, configure, and diagnose external plugins running over JSON-RPC 2.0 stdio:
+
+### 15.1 List Plugins (`kb plugin list`)
+Displays all installed plugins in a clean formatted table with version, status, source, and granted capabilities:
+```bash
+kb plugin list
+```
+
+### 15.2 Install External Plugin (`kb plugin install`)
+Spawns the target binary, initiates the JSON-RPC handshake, validates its manifest, registers its metadata, and records default capability grants:
+```bash
+kb plugin install ./bin/kb-plugin-gym
+kb plugin install /usr/local/bin/kb-plugin-finance
+```
+
+### 15.3 Enable / Disable Plugins (`kb plugin enable`, `kb plugin disable`)
+Controls whether a plugin is started at boot and whether its commands, Web views, and MCP tools are mounted:
+```bash
+kb plugin enable gym
+kb plugin disable gym
+```
+
+### 15.4 Capability Grant & Revocation (`kb plugin grant`, `kb plugin revoke`)
+Dynamically controls permissions granted to a plugin sandbox:
+```bash
+# Grant universal storage and audit capabilities:
+kb plugin grant gym storage.entries
+kb plugin grant gym audit.write
+
+# Revoke sensitive capabilities:
+kb plugin revoke gym secrets
+kb plugin revoke gym network
+```
+
+#### Standard Capabilities:
+- `storage.entries`: Access to polymorphic `plugin_entries` CRUD and SQLite FTS5 queries.
+- `storage.sql`: Direct DDL execution and dedicated table creation.
+- `audit.write`: Writing custom structured audit records into `audit_logs`.
+- `secrets`: Hardware keyring access for sensitive credentials.
+- `network`: Outbound network access from the plugin process.
+- `sync.adapter`: Custom replication conflict resolution logic.
+
+### 15.5 Diagnostic Health Check (`kb plugin doctor`)
+Runs a live diagnostic probe against an installed plugin:
+- Verifies binary existence and executable permissions.
+- Spawns subprocess and performs JSON-RPC protocol handshake (`initialize`).
+- Validates manifest schema and API version compatibility.
+- Checks database registration and granted capabilities.
+- Tests process termination and clean resource teardown.
+
+```bash
+kb plugin doctor gym
+```
+
 

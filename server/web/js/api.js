@@ -88,10 +88,11 @@ export async function fetchItems(includeDeleted = false) {
 }
 
 /**
- * Fetches all unique tags with usage counts.
+ * Fetches all unique tags with usage counts (optional scope: 'notes', 'docs', or all).
  */
-export async function fetchTags() {
-  const res = await apiFetch('/api/tags');
+export async function fetchTags(scope = null) {
+  const url = scope ? `/api/tags?scope=${encodeURIComponent(scope)}` : '/api/tags';
+  const res = await apiFetch(url);
   if (!res.ok) return [];
   return res.json();
 }
@@ -178,6 +179,80 @@ export async function fetchDocsTree() {
 export async function fetchDocContent(docPath) {
   const res = await apiFetch(`/api/docs/content?path=${encodeURIComponent(docPath)}`);
   if (!res.ok) throw new Error('Failed to load document content');
+  return res.json();
+}
+
+/**
+ * Updates an existing document's content, title, and/or tags.
+ */
+export async function saveDocContent(docPath, title, content, tags = null) {
+  const payload = { path: docPath, title, content };
+  if (tags !== null) payload.tags = tags;
+  const res = await apiFetch('/api/docs/content', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to save document');
+  return res.json();
+}
+
+/**
+ * Creates a new document.
+ */
+export async function createDoc(payload) {
+  const res = await apiFetch('/api/docs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to create document');
+  return res.json();
+}
+
+/**
+ * Creates a new documentation folder.
+ */
+export async function createDocFolder(payload) {
+  const res = await apiFetch('/api/docs/folders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to create folder');
+  return res.json();
+}
+
+/**
+ * Soft-deletes a document or folder.
+ */
+export async function deleteDoc(docPath, reason = 'deleted from web UI') {
+  const res = await apiFetch(`/api/docs?path=${encodeURIComponent(docPath)}&reason=${encodeURIComponent(reason)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete document');
+  return res.json();
+}
+
+/**
+ * Batch-imports a tree of folders and markdown files.
+ */
+export async function importDocsTree(items, overwrite = true) {
+  const res = await apiFetch('/api/docs/import-tree', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items, overwrite }),
+  });
+  if (!res.ok) throw new Error('Failed to import documentation tree');
+  return res.json();
+}
+
+/**
+ * Performs full-text search across documentation.
+ */
+export async function searchDocs(query) {
+  const res = await apiFetch(`/api/docs/search?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error('Documentation search failed');
   return res.json();
 }
 

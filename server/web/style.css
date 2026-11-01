@@ -444,7 +444,24 @@ html, body {
 .badge-project { color: var(--accent-purple); background: rgba(188, 140, 255, 0.1); }
 .badge-idea { color: var(--accent-green); background: rgba(63, 185, 80, 0.1); }
 .badge-decision { color: var(--accent-teal); background: rgba(57, 197, 207, 0.1); }
+.badge-doc { color: #38bdf8; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); }
 .badge-log { color: var(--text-muted); background: rgba(255, 255, 255, 0.05); }
+
+.tree-file-tags {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 6px;
+  align-items: center;
+}
+
+.tree-tag-badge {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0 4px;
+  border-radius: 3px;
+}
 
 .item-title {
   font-weight: 500;
@@ -2300,10 +2317,17 @@ html, body {
 .docs-pane-title {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-main);
+}
+
+.docs-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .docs-search-wrapper input {
@@ -2320,6 +2344,32 @@ html, body {
 
 .docs-search-wrapper input:focus {
   border-color: var(--border-focus);
+}
+
+.docs-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.docs-dropzone:hover, .docs-pane.drag-over .docs-dropzone {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  background: rgba(88, 166, 255, 0.08);
+}
+
+.docs-pane.drag-over {
+  outline: 2px dashed var(--accent-blue);
+  outline-offset: -3px;
 }
 
 .docs-tree-container {

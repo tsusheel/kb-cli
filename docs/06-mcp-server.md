@@ -320,3 +320,48 @@ Predefined prompt templates guide AI assistants in executing structured workflow
   }
 }
 ```
+
+---
+
+## 7. Dynamic Plugin Tool Integration
+
+In addition to the 22 built-in core tools, the MCP server dynamically mounts specialized tools exposed by active external plugins:
+
+```mermaid
+sequenceDiagram
+    participant LLM as AI Assistant (Claude / Antigravity)
+    participant MCP as kb MCP Server (mcp/server.go)
+    participant Reg as Plugin Registry (plugins/)
+    participant Ext as Plugin Process (JSON-RPC)
+    participant Store as Universal Store (db/plugin_store.go)
+
+    Note over MCP,Reg: Server Boot: Read active plugin tool specs
+    Reg-->>MCP: Register "gym_log_workout", "gym_get_summary"
+    
+    LLM->>MCP: call_tool: "gym_log_workout" { date, exercises }
+    MCP->>Ext: JSON-RPC invoke_tool("gym_log_workout", args)
+    Ext->>Store: Create plugin_entries (actor_type='ai')
+    Store-->>Ext: entry_id: "entry_uuid"
+    Ext-->>MCP: Tool result JSON
+    MCP-->>LLM: Success confirmation
+```
+
+### 7.1 How Plugins Expose MCP Tools
+When an external plugin initializes, it declares its tools in its `Manifest`:
+```go
+MCPTools: []api.MCPToolSpec{
+    {
+        Name:        "gym_log_workout",
+        Description: "Log a workout session with sets, reps, and weight",
+        InputSchema: map[string]interface{}{...},
+    },
+}
+```
+
+### 7.2 Automatic AI Attribution
+When an AI agent modifies data via a plugin tool, the host runtime scopes the operation with:
+```go
+actorCtx := models.DefaultAIActor("mcp_agent")
+```
+This guarantees that plugin entries and `audit_logs` record the exact AI provenance, maintaining transparency and point-in-time rollback capability.
+

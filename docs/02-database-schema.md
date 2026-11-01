@@ -399,3 +399,251 @@ type AuditEntry struct {
     CreatedAt      time.Time   `json:"created_at"`
 }
 ```
+
+---
+
+## 6. Versioned Schema Migrations (`db/migrations.go`)
+
+`kb-cli` uses an automated, versioned migration runner with checksum validation to manage database evolution without data loss:
+
+### 6.1 Core Schema Migrations (`schema_migrations`)
+```sql
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version     INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL,
+    applied_at  DATETIME NOT NULL
+);
+```
+
+### 6.2 Plugin DDL Migrations (`plugin_migrations`)
+```sql
+CREATE TABLE IF NOT EXISTS plugin_migrations (
+    plugin_id   TEXT NOT NULL,
+    version     INTEGER NOT NULL,
+    checksum    TEXT NOT NULL,             -- SHA-256 hash of the migration script
+    applied_at  DATETIME NOT NULL,
+    PRIMARY KEY (plugin_id, version)
+);
+```
+
+---
+
+## 7. Plugin Registry & Capabilities
+
+### 7.1 Plugin Registry (`plugins`)
+```sql
+CREATE TABLE IF NOT EXISTS plugins (
+    plugin_id       TEXT PRIMARY KEY,
+    version         TEXT NOT NULL,
+    api_version     TEXT NOT NULL,
+    schema_version  INTEGER NOT NULL DEFAULT 1,
+    enabled         INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+    source          TEXT NOT NULL,         -- e.g. 'external:/path/to/binary' or 'builtin'
+    manifest_json   TEXT NOT NULL,
+    installed_at    DATETIME NOT NULL,
+    updated_at      DATETIME NOT NULL
+);
+```
+
+### 7.2 Plugin Capabilities (`plugin_capabilities`)
+```sql
+CREATE TABLE IF NOT EXISTS plugin_capabilities (
+    plugin_id       TEXT NOT NULL,
+    capability      TEXT NOT NULL,         -- e.g. 'storage.entries', 'audit.write'
+    granted         INTEGER NOT NULL DEFAULT 0 CHECK (granted IN (0, 1)),
+    PRIMARY KEY (plugin_id, capability)
+);
+```
+
+---
+
+## 8. Universal Storage Envelope (`plugin_entries`)
+
+Polymorphic JSON document store enabling external plugins to persist arbitrary domain records while retaining indexed query performance and full-text search:
+
+```sql
+CREATE TABLE IF NOT EXISTS plugin_entries (
+    id              TEXT PRIMARY KEY,
+    plugin_id       TEXT NOT NULL,
+    entity_type     TEXT NOT NULL,
+    schema_version  INTEGER NOT NULL DEFAULT 1,
+    parent_id       TEXT,
+    status          TEXT NOT NULL DEFAULT 'active',
+    occurred_at     DATETIME,
+    entry_date      TEXT,                           -- 'YYYY-MM-DD'
+    num_val         REAL DEFAULT 0,
+    search_text     TEXT NOT NULL DEFAULT '',
+    data            TEXT NOT NULL DEFAULT '{}',     -- Domain payload JSON
+    created_at      DATETIME NOT NULL,
+    updated_at      DATETIME NOT NULL,
+    deleted_at      DATETIME,
+    deleted_note    TEXT,
+    revision        INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (plugin_id, id),
+    FOREIGN KEY (plugin_id) REFERENCES plugins(plugin_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_plugin_entries_date ON plugin_entries(plugin_id, entity_type, entry_date);
+CREATE INDEX IF NOT EXISTS idx_plugin_entries_parent ON plugin_entries(plugin_id, parent_id) WHERE parent_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_plugin_entries_updated ON plugin_entries(updated_at, id);
+CREATE INDEX IF NOT EXISTS idx_plugin_entries_status ON plugin_entries(plugin_id, status, entry_date);
+CREATE INDEX IF NOT EXISTS idx_plugin_entries_numeric ON plugin_entries(plugin_id, entity_type, num_val);
+```
+
+### 8.1 SQLite FTS5 Full-Text Index (`plugin_entries_fts`)
+```sql
+CREATE VIRTUAL TABLE IF NOT EXISTS plugin_entries_fts USING fts5(
+    entry_id UNINDEXED,
+    plugin_id UNINDEXED,
+    entity_type UNINDEXED,
+    search_text,
+    tokenize = 'unicode61'
+);
+```
+
+---
+
+## 9. Entity Revisions, Tags, & Links
+
+### 9.1 Immutable Entity Revisions (`entity_revisions`)
+```sql
+CREATE TABLE IF NOT EXISTS entity_revisions (
+    revision_id     TEXT PRIMARY KEY,
+    plugin_id       TEXT NOT NULL,
+    entity_type     TEXT NOT NULL,
+    entity_id       TEXT NOT NULL,
+    revision        INTEGER NOT NULL,
+    schema_version  INTEGER NOT NULL,
+    snapshot_json   TEXT NOT NULL,
+    created_at      DATETIME NOT NULL,
+    UNIQUE (plugin_id, entity_type, entity_id, revision)
+);
+
+CREATE INDEX IF NOT EXISTS idx_revisions_entity ON entity_revisions(plugin_id, entity_type, entity_id, revision DESC);
+```
+
+### 9.2 Cross-Entity Tags & Links
+```sql
+CREATE TABLE IF NOT EXISTS entity_tags (
+    plugin_id       TEXT NOT NULL,
+    entity_type     TEXT NOT NULL,
+    entity_id       TEXT NOT NULL,
+    tag_id          TEXT NOT NULL,
+    PRIMARY KEY (plugin_id, entity_type, entity_id, tag_id),
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS entity_links (
+    link_id         TEXT PRIMARY KEY,
+    source_plugin   TEXT NOT NULL,
+    source_type     TEXT NOT NULL,
+    source_id       TEXT NOT NULL,
+    target_plugin   TEXT NOT NULL,
+    target_type     TEXT NOT NULL,
+    target_id       TEXT NOT NULL,
+    relation_type   TEXT NOT NULL DEFAULT 'related_to',
+    created_at      DATETIME NOT NULL,
+    UNIQUE (source_plugin, source_type, source_id, target_plugin, target_type, target_id, relation_type)
+);
+```
+
+---
+
+## 10. Transactional Outbox & Sync Cursors
+
+```sql
+CREATE TABLE IF NOT EXISTS sync_outbox (
+    sequence        INTEGER PRIMARY KEY AUTOINCREMENT,
+    change_id       TEXT NOT NULL UNIQUE,
+    plugin_id       TEXT NOT NULL,
+    entity_type     TEXT NOT NULL,
+    entity_id       TEXT NOT NULL,
+    operation       TEXT NOT NULL CHECK (operation IN ('upsert', 'tombstone')),
+    base_version    INTEGER NOT NULL DEFAULT 0,
+    entity_version  INTEGER NOT NULL,
+    schema_version  INTEGER NOT NULL,
+    payload_json    TEXT NOT NULL,
+    created_at      DATETIME NOT NULL,
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    last_error      TEXT,
+    acknowledged_at DATETIME
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_pending ON sync_outbox(sequence) WHERE acknowledged_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS sync_cursors (
+    remote_id       TEXT NOT NULL,
+    stream_id       TEXT NOT NULL,
+    cursor_value    TEXT,
+    updated_at      DATETIME NOT NULL,
+    PRIMARY KEY (remote_id, stream_id)
+);
+```
+
+---
+
+## 11. Extended Audit Logs Columns
+
+Migration v2 enhances `audit_logs` with backward-compatible column extensions:
+- `plugin_id TEXT DEFAULT 'core'`
+- `revision INTEGER DEFAULT 1`
+- `actor_type TEXT DEFAULT 'user'` (`user`, `plugin`, `ai`, `system`)
+- `actor_id TEXT`
+- `request_id TEXT`
+- `before_revision TEXT`
+- `after_revision TEXT`
+- `diff_json TEXT DEFAULT '{}'`
+
+---
+
+## 12. Go Domain Models ([models/plugin.go](file:///e:/kb-cli/kb-cli/models/plugin.go))
+
+```go
+type PluginEntry struct {
+    ID            string     `json:"id"`
+    PluginID      string     `json:"plugin_id"`
+    EntityType    string     `json:"entity_type"`
+    SchemaVersion int        `json:"schema_version"`
+    ParentID      *string    `json:"parent_id,omitempty"`
+    Status        string     `json:"status"`
+    OccurredAt    *time.Time `json:"occurred_at,omitempty"`
+    EntryDate     *string    `json:"entry_date,omitempty"` // YYYY-MM-DD
+    NumVal        float64    `json:"num_val"`
+    SearchText    string     `json:"search_text"`
+    Data          string     `json:"data"` // Validated JSON payload
+    CreatedAt     time.Time  `json:"created_at"`
+    UpdatedAt     time.Time  `json:"updated_at"`
+    DeletedAt     *time.Time `json:"deleted_at,omitempty"`
+    DeletedNote   *string    `json:"deleted_note,omitempty"`
+    Revision      int64      `json:"revision"`
+}
+
+type EntityRevision struct {
+    RevisionID    string    `json:"revision_id"`
+    PluginID      string    `json:"plugin_id"`
+    EntityType    string    `json:"entity_type"`
+    EntityID      string    `json:"entity_id"`
+    Revision      int64     `json:"revision"`
+    SchemaVersion int       `json:"schema_version"`
+    SnapshotJSON  string    `json:"snapshot_json"`
+    CreatedAt     time.Time `json:"created_at"`
+}
+
+type OutboxChange struct {
+    Sequence       int64      `json:"sequence"`
+    ChangeID       string     `json:"change_id"`
+    PluginID       string     `json:"plugin_id"`
+    EntityType     string     `json:"entity_type"`
+    EntityID       string     `json:"entity_id"`
+    Operation      string     `json:"operation"` // "upsert" or "tombstone"
+    BaseVersion    int64      `json:"base_version"`
+    EntityVersion  int64      `json:"entity_version"`
+    SchemaVersion  int        `json:"schema_version"`
+    PayloadJSON    string     `json:"payload_json"`
+    CreatedAt      time.Time  `json:"created_at"`
+    Attempts       int        `json:"attempts"`
+    LastError      *string    `json:"last_error,omitempty"`
+    AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
+}
+```
+

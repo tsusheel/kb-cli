@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -44,9 +45,12 @@ func RegisterRoutes() http.Handler {
 	mux.HandleFunc("/api/plugins", requireAuth(handlePluginList))
 	mux.HandleFunc("/api/plugins/", requireAuth(handlePluginDispatch))
 
-	// Documentation Routes (publicly accessible)
-	mux.HandleFunc("/api/docs", handleGetDocsTree)
-	mux.HandleFunc("/api/docs/content", handleGetDocContent)
+	// Documentation Routes
+	mux.HandleFunc("/api/docs", handleDocsDispatch)
+	mux.HandleFunc("/api/docs/content", handleDocContent)
+	mux.HandleFunc("/api/docs/search", handleSearchDocs)
+	mux.HandleFunc("/api/docs/folders", requireAuth(handleCreateDocFolder))
+	mux.HandleFunc("/api/docs/import-tree", requireAuth(handleImportDocsTree))
 
 	// Static Web Assets
 	webFS, err := fs.Sub(embeddedFiles, "web")
@@ -124,18 +128,20 @@ func jsonError(w http.ResponseWriter, statusCode int, message string) {
 	jsonResponse(w, statusCode, map[string]string{"error": message})
 }
 
-// ItemPayload represents a unified note or daily log item for web search
+// ItemPayload represents a unified note, daily log, or documentation item for web search
 type ItemPayload struct {
-	ID        string    `json:"id"`
-	ShortID   string    `json:"short_id"`
-	Type      string    `json:"type"`
-	Status    string    `json:"status"`
-	Area      string    `json:"area,omitempty"`
-	Display   string    `json:"display"`
-	Flesh     string    `json:"flesh,omitempty"`
-	Tags      []string  `json:"tags,omitempty"`
-	Timestamp string    `json:"timestamp"`
-	IsLog     bool      `json:"is_log"`
+	ID        string     `json:"id"`
+	ShortID   string     `json:"short_id"`
+	Type      string     `json:"type"`
+	Status    string     `json:"status"`
+	Area      string     `json:"area,omitempty"`
+	Display   string     `json:"display"`
+	Flesh     string     `json:"flesh,omitempty"`
+	Tags      []string   `json:"tags,omitempty"`
+	Timestamp string     `json:"timestamp"`
+	IsLog     bool       `json:"is_log"`
+	IsDoc     bool       `json:"is_doc"`
+	DocPath   string     `json:"doc_path,omitempty"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
@@ -174,6 +180,7 @@ func handleGetItems(w http.ResponseWriter, r *http.Request) {
 			Tags:      tagsMap[n.ID],
 			Timestamp: n.UpdatedAt.Format("2006-01-02 15:04"),
 			IsLog:     false,
+			IsDoc:     false,
 		}
 		if !n.DeletedAt.IsZero() {
 			item.DeletedAt = &n.DeletedAt
@@ -200,9 +207,43 @@ func handleGetItems(w http.ResponseWriter, r *http.Request) {
 				Display:   l.Content,
 				Timestamp: l.CreatedAt.Format("2006-01-02 15:04"),
 				IsLog:     true,
+				IsDoc:     false,
 			}
 			if !l.DeletedAt.IsZero() {
 				item.DeletedAt = &l.DeletedAt
+			}
+			items = append(items, item)
+		}
+	}
+
+	// 4. Fetch Active Docs
+	docs, err := db.GetActiveDocsList()
+	if err == nil {
+		for _, d := range docs {
+			shortID := d.ID
+			if len(shortID) > 7 {
+				shortID = shortID[:7]
+			}
+			folderArea := path.Dir(d.Path)
+			if folderArea == "." || folderArea == "/" {
+				folderArea = "docs"
+			}
+			item := ItemPayload{
+				ID:        d.ID,
+				ShortID:   shortID,
+				Type:      "doc",
+				Status:    "active",
+				Area:      folderArea,
+				Display:   d.Title,
+				Flesh:     d.Content,
+				Tags:      d.Tags,
+				Timestamp: d.UpdatedAt.Format("2006-01-02 15:04"),
+				IsLog:     false,
+				IsDoc:     true,
+				DocPath:   d.Path,
+			}
+			if d.DeletedAt != nil {
+				item.DeletedAt = d.DeletedAt
 			}
 			items = append(items, item)
 		}
@@ -560,13 +601,59 @@ func handleGetTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	scope := strings.ToLower(r.URL.Query().Get("scope"))
+	if scope == "docs" {
+		tags, err := db.GetDocsTagsSummary()
+		if err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		jsonResponse(w, http.StatusOK, tags)
+		return
+	}
+
+	if scope == "notes" {
+		query := `
+			SELECT t.name, COUNT(nt.note_id) as count
+			FROM tags t
+			JOIN note_tags nt ON t.id = nt.tag_id
+			JOIN notes n ON nt.note_id = n.id AND n.deleted_at IS NULL
+			GROUP BY t.id, t.name
+			ORDER BY count DESC
+		`
+		rows, err := db.DB.Query(query)
+		if err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		defer rows.Close()
+
+		var tags []models.TagCount
+		for rows.Next() {
+			var tc models.TagCount
+			if err := rows.Scan(&tc.Name, &tc.Count); err == nil {
+				tags = append(tags, tc)
+			}
+		}
+		if tags == nil {
+			tags = []models.TagCount{}
+		}
+		jsonResponse(w, http.StatusOK, tags)
+		return
+	}
+
+	// Default/all: combine notes and docs tags
 	query := `
-		SELECT t.name, COUNT(nt.note_id) as count
+		SELECT t.name, (
+			COALESCE((SELECT COUNT(*) FROM note_tags nt JOIN notes n ON nt.note_id = n.id AND n.deleted_at IS NULL WHERE nt.tag_id = t.id), 0) +
+			COALESCE((SELECT COUNT(*) FROM doc_tags dt JOIN doc_nodes dn ON dt.doc_id = dn.id AND dn.deleted_at IS NULL WHERE dt.tag_id = t.id), 0)
+		) as total_count
 		FROM tags t
-		JOIN note_tags nt ON t.id = nt.tag_id
-		JOIN notes n ON nt.note_id = n.id AND n.deleted_at IS NULL
-		GROUP BY t.id, t.name
-		ORDER BY count DESC
+		WHERE (
+			EXISTS (SELECT 1 FROM note_tags nt JOIN notes n ON nt.note_id = n.id AND n.deleted_at IS NULL WHERE nt.tag_id = t.id)
+			OR EXISTS (SELECT 1 FROM doc_tags dt JOIN doc_nodes dn ON dt.doc_id = dn.id AND dn.deleted_at IS NULL WHERE dt.tag_id = t.id)
+		)
+		ORDER BY total_count DESC
 	`
 	rows, err := db.DB.Query(query)
 	if err != nil {
@@ -649,12 +736,40 @@ func handleSync(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func handleDocsDispatch(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		handleGetDocsTree(w, r)
+	case http.MethodPost:
+		requireAuth(handleCreateDoc)(w, r)
+	case http.MethodDelete:
+		requireAuth(handleDeleteDoc)(w, r)
+	default:
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func handleDocContent(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		handleGetDocContent(w, r)
+	case http.MethodPut:
+		requireAuth(handleUpdateDocContent)(w, r)
+	default:
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
 func handleGetDocsTree(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	tree, err := docs.GetDocsTree()
+	tree, err := db.GetDocsTree()
+	if err != nil || len(tree) == 0 {
+		_ = db.SeedDocsFromFS(docs.FS)
+		tree, err = db.GetDocsTree()
+	}
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get docs tree: %v", err))
 		return
@@ -671,6 +786,21 @@ func handleGetDocContent(w http.ResponseWriter, r *http.Request) {
 	if docPath == "" {
 		docPath = "README.md"
 	}
+
+	node, err := db.GetDocNodeByPath(docPath)
+	if err == nil {
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"id":         node.ID,
+			"path":       node.Path,
+			"title":      node.Title,
+			"content":    node.Content,
+			"tags":       node.Tags,
+			"updated_at": node.UpdatedAt,
+		})
+		return
+	}
+
+	// Fallback to static embed
 	content, err := docs.ReadDocFile(docPath)
 	if err != nil {
 		jsonError(w, http.StatusNotFound, fmt.Sprintf("doc not found: %v", err))
@@ -679,7 +809,188 @@ func handleGetDocContent(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
 		"path":    docPath,
 		"content": content,
+		"tags":    []string{},
 	})
+}
+
+func handleCreateDoc(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Title    string   `json:"title"`
+		Path     string   `json:"path"`
+		ParentID *string  `json:"parent_id"`
+		Content  string   `json:"content"`
+		Tags     []string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	if strings.TrimSpace(payload.Path) == "" {
+		jsonError(w, http.StatusBadRequest, "path is required")
+		return
+	}
+	if strings.TrimSpace(payload.Title) == "" {
+		payload.Title = path.Base(payload.Path)
+	}
+
+	node := &db.DocNode{
+		ParentID: payload.ParentID,
+		Type:     "doc",
+		Path:     payload.Path,
+		Title:    payload.Title,
+		Content:  payload.Content,
+		Tags:     payload.Tags,
+	}
+	if err := db.CreateDocNode(node); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, node)
+}
+
+func handleUpdateDocContent(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		ID      string   `json:"id"`
+		Path    string   `json:"path"`
+		Title   string   `json:"title"`
+		Content string   `json:"content"`
+		Tags    []string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+
+	var node *db.DocNode
+	var err error
+	if payload.ID != "" {
+		node, err = db.GetDocNodeByID(payload.ID)
+	} else if payload.Path != "" {
+		node, err = db.GetDocNodeByPath(payload.Path)
+	} else {
+		jsonError(w, http.StatusBadRequest, "either id or path must be provided")
+		return
+	}
+	if err != nil {
+		jsonError(w, http.StatusNotFound, "doc not found")
+		return
+	}
+
+	if payload.Title != "" {
+		node.Title = payload.Title
+	}
+	node.Content = payload.Content
+	if payload.Tags != nil {
+		node.Tags = payload.Tags
+	}
+	if err := db.UpdateDocNode(node); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, node)
+}
+
+func handleDeleteDoc(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	docPath := r.URL.Query().Get("path")
+	if id == "" && docPath != "" {
+		node, err := db.GetDocNodeByPath(docPath)
+		if err == nil {
+			id = node.ID
+		}
+	}
+	if id == "" {
+		jsonError(w, http.StatusBadRequest, "id or path is required")
+		return
+	}
+	reason := r.URL.Query().Get("reason")
+	if reason == "" {
+		reason = "deleted from web UI"
+	}
+	if err := db.DeleteDocNode(id, reason); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]interface{}{"success": true, "id": id})
+}
+
+func handleCreateDocFolder(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Path     string  `json:"path"`
+		Title    string  `json:"title"`
+		ParentID *string `json:"parent_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	if strings.TrimSpace(payload.Path) == "" {
+		jsonError(w, http.StatusBadRequest, "folder path is required")
+		return
+	}
+	folderName := path.Base(payload.Path)
+	if strings.TrimSpace(payload.Title) == "" {
+		payload.Title = folderName
+	}
+	node := &db.DocNode{
+		ParentID: payload.ParentID,
+		Type:     "folder",
+		Path:     payload.Path,
+		Name:     folderName,
+		Title:    payload.Title,
+	}
+	if err := db.CreateDocNode(node); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusCreated, node)
+}
+
+func handleImportDocsTree(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Items     []db.BatchDocImportItem `json:"items"`
+		Overwrite bool                    `json:"overwrite"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	if len(payload.Items) == 0 {
+		jsonError(w, http.StatusBadRequest, "items list is empty")
+		return
+	}
+
+	created, updated, err := db.BatchImportDocNodes(payload.Items, payload.Overwrite)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, fmt.Sprintf("batch import failed: %v", err))
+		return
+	}
+
+	newTree, _ := db.GetDocsTree()
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"created": created,
+		"updated": updated,
+		"tree":    newTree,
+	})
+}
+
+func handleSearchDocs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	query := r.URL.Query().Get("q")
+	if strings.TrimSpace(query) == "" {
+		jsonResponse(w, http.StatusOK, []interface{}{})
+		return
+	}
+	results, err := db.SearchDocs(query)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, results)
 }
 
 func handlePluginList(w http.ResponseWriter, r *http.Request) {

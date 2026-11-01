@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/tsusheel/kb-cli/db"
+	"github.com/tsusheel/kb-cli/docs"
 	"github.com/tsusheel/kb-cli/utils"
 )
 
@@ -29,4 +30,7 @@ func InitApp() {
 		fmt.Fprintf(os.Stderr, "Error initializing database schema: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Auto-seed documentation from embedded FS if doc_nodes is empty
+	_ = db.SeedDocsFromFS(docs.FS)
 }
