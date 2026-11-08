@@ -96,6 +96,7 @@ html, body {
 }
 
 .search-container {
+  position: relative;
   flex: 1;
   min-width: 0;
 }
@@ -104,25 +105,132 @@ html, body {
   position: relative;
   display: flex;
   align-items: center;
-  width: 100%;
-}
-
-#search-input {
+  flex-wrap: nowrap;
   width: 100%;
   height: 34px;
-  padding: 0 85px 0 12px;
   background: var(--bg-input);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
+  padding: 0 85px 0 8px;
+  gap: 4px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  cursor: text;
+  overflow: hidden;
+}
+
+.search-input-wrapper:focus-within {
+  border-color: var(--border-focus);
+}
+
+.search-tokens-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  max-width: 60%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.search-tokens-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.search-token-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 1px 8px;
+  border-radius: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  user-select: none;
+  line-height: 1.4;
+  animation: pillPop 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes pillPop {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Tag Pill */
+.search-token-pill.token-tag {
+  background: rgba(31, 111, 235, 0.2);
+  border: 1px solid rgba(56, 139, 253, 0.45);
+  color: #58a6ff;
+}
+
+/* Type Pill */
+.search-token-pill.token-type {
+  background: rgba(137, 87, 229, 0.2);
+  border: 1px solid rgba(163, 113, 247, 0.45);
+  color: #bc8cff;
+}
+
+/* Status Pill */
+.search-token-pill.token-status {
+  background: rgba(46, 160, 67, 0.2);
+  border: 1px solid rgba(63, 185, 80, 0.45);
+  color: #3fb950;
+}
+
+/* Area Pill */
+.search-token-pill.token-area {
+  background: rgba(210, 153, 34, 0.2);
+  border: 1px solid rgba(210, 153, 34, 0.45);
+  color: #d29922;
+}
+
+/* Negated Pill */
+.search-token-pill.token-negated {
+  background: rgba(248, 81, 73, 0.2);
+  border: 1px solid rgba(248, 81, 73, 0.45);
+  color: #f85149;
+}
+
+.search-token-pill.token-custom {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+.token-remove-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 2px;
+  font-size: 10px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  width: 13px;
+  height: 13px;
+  transition: opacity 0.1s, background 0.1s;
+}
+
+.token-remove-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+#search-input {
+  flex: 1;
+  min-width: 80px;
+  height: 100%;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
   color: var(--text-main);
   font-family: var(--font-sans);
   font-size: 13px;
   outline: none;
-  transition: border-color 0.15s ease;
-}
-
-#search-input:focus {
-  border-color: var(--border-focus);
 }
 
 #search-input::placeholder {
@@ -166,6 +274,150 @@ html, body {
 .btn-clear:hover {
   background: rgba(255, 255, 255, 0.18);
   color: var(--text-main);
+}
+
+/* Smart Search Caret-Anchored Autocomplete */
+.search-autocomplete {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  max-width: 480px;
+  max-height: 330px;
+  background: #161b22;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(12px);
+  animation: autocompleteFadeIn 0.12s ease-out;
+}
+
+.search-autocomplete.mobile-autocomplete {
+  top: auto;
+  bottom: calc(100% + 6px);
+  left: 10px;
+  right: 10px;
+  width: auto;
+  max-width: none;
+}
+
+@keyframes autocompleteFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.autocomplete-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.autocomplete-hint kbd {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.autocomplete-list {
+  overflow-y: auto;
+  max-height: 230px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.autocomplete-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.1s ease;
+  user-select: none;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+  background: var(--bg-hover);
+}
+
+.autocomplete-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.autocomplete-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: #58a6ff;
+  flex-shrink: 0;
+}
+
+.autocomplete-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.autocomplete-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.autocomplete-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.autocomplete-footer {
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.autocomplete-footer kbd {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  padding: 0 4px;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
 }
 
 .header-actions {

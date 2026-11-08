@@ -20,6 +20,7 @@ import {
 import { renderMarkdown, applyPostMarkdownEnhancements } from './markdown.js';
 import { showMobileDetail, showMobileList, updateViewModeDisplay, resetMobileSearch, filterAndRender, loadData, loadTags } from './finder.js';
 import { escapeHtml, scrollPreviewToTop, showToast } from './utils.js';
+import { searchRegistry } from './search-registry.js';
 
 let isDocsInitialized = false;
 
@@ -376,6 +377,8 @@ function renderTreeItem(item, query, depth = 0) {
   const itemTitle = item.title || item.Title || item.name || item.Name || itemPath;
   const itemName = item.name || item.Name || '';
 
+  const parsed = query ? searchRegistry.parseQuery(query) : null;
+
   if (isDirectory) {
     const isExpanded = state.docsExpandedFolders.has(itemPath) || state.docsExpandedFolders.has(itemName) || (query && query.length > 0) || Boolean(state.activeDocTagFilter);
     const childrenList = item.children || item.Children || [];
@@ -384,8 +387,9 @@ function renderTreeItem(item, query, depth = 0) {
       .map((child) => renderTreeItem(child, query, depth + 1))
       .filter(Boolean);
 
-    const selfMatches = (!query && !state.activeDocTagFilter) || 
-      (!state.activeDocTagFilter && query && (itemTitle.toLowerCase().includes(query) || itemName.toLowerCase().includes(query) || itemPath.toLowerCase().includes(query)));
+    const matchText = (parsed?.cleanText || query || '').toLowerCase();
+    const selfMatches = !matchText || 
+      (matchText && (itemTitle.toLowerCase().includes(matchText) || itemName.toLowerCase().includes(matchText) || itemPath.toLowerCase().includes(matchText)));
 
     if ((query || state.activeDocTagFilter) && !selfMatches && renderedChildren.length === 0) {
       return null;
@@ -406,14 +410,28 @@ function renderTreeItem(item, query, depth = 0) {
       </div>
     `;
   } else {
-    if (query) {
-      const match = itemTitle.toLowerCase().includes(query) || 
-                    itemName.toLowerCase().includes(query) || 
-                    itemPath.toLowerCase().includes(query);
+    const itemTags = item.tags || item.Tags || [];
+
+    if (parsed) {
+      if (parsed.tags.length > 0) {
+        const lowerTags = itemTags.map(t => t.toLowerCase());
+        const hasAllTags = parsed.tags.every(t => lowerTags.includes(t));
+        if (!hasAllTags) return null;
+      }
+      if (parsed.cleanText) {
+        const text = parsed.cleanText.toLowerCase();
+        const match = itemTitle.toLowerCase().includes(text) || 
+                      itemName.toLowerCase().includes(text) || 
+                      itemPath.toLowerCase().includes(text);
+        if (!match) return null;
+      }
+    } else if (query) {
+      const match = itemTitle.toLowerCase().includes(query.toLowerCase()) || 
+                    itemName.toLowerCase().includes(query.toLowerCase()) || 
+                    itemPath.toLowerCase().includes(query.toLowerCase());
       if (!match) return null;
     }
 
-    const itemTags = item.tags || item.Tags || [];
     if (state.activeDocTagFilter) {
       const hasTag = itemTags.some(t => t.toLowerCase() === state.activeDocTagFilter.toLowerCase());
       if (!hasTag) return null;

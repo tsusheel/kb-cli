@@ -34,14 +34,17 @@
       </div>
 
       <div class="search-container">
-        <div class="search-input-wrapper">
-          <input type="text" id="search-input" placeholder="Search (/ to focus)" autocomplete="off" spellcheck="false"
+        <div class="search-input-wrapper" id="search-input-wrapper">
+          <div id="search-tokens-bar" class="search-tokens-bar" style="display: none;"></div>
+          <input type="text" id="search-input" placeholder="Search (/ to focus, #tag, @type, is:status)" autocomplete="off" spellcheck="false"
             autofocus>
           <div class="search-input-actions">
-            <button id="clear-search-btn" class="btn-clear" title="Clear (Esc)" style="display: none;">✕</button>
+            <button id="clear-search-btn" class="btn-clear" title="Clear Search" style="display: none;">✕</button>
             <span class="search-count-badge" id="search-count">0</span>
           </div>
         </div>
+        <!-- Smart Search Caret-Anchored Autocomplete -->
+        <div id="search-autocomplete" class="search-autocomplete" style="display: none;"></div>
       </div>
 
       <div class="header-actions">
@@ -221,12 +224,13 @@
 
     <!-- Mobile Bottom Search Dock -->
     <div id="mobile-bottom-search" class="mobile-bottom-search">
-      <div class="mobile-bottom-search-inner">
+      <div class="mobile-bottom-search-inner" id="mobile-search-input-wrapper">
         <svg class="mobile-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2">
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
+        <div id="mobile-search-tokens-bar" class="search-tokens-bar" style="display: none;"></div>
         <input type="text" id="mobile-search-input" placeholder="Search notes..." autocomplete="off" spellcheck="false">
         <button id="mobile-search-close" class="btn-close-search" title="Close Search">Done</button>
       </div>

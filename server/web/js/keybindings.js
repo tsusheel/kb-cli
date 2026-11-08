@@ -6,7 +6,8 @@
 
 import { dom } from './dom.js';
 import { state } from './state.js';
-import { showToast } from './utils.js';
+import { showToast, escapeHtml } from './utils.js';
+import { searchRegistry } from './search-registry.js';
 import { closeNoteModal, openNoteModal } from './modal.js';
 import {
   closeDocModal,
@@ -207,6 +208,32 @@ class KeybindingRegistry {
         </div>
       `;
     }
+    // Add Smart Search Syntax & Filters Section
+    const searchSyntax = searchRegistry.getSyntaxDocumentation();
+    if (searchSyntax && searchSyntax.length > 0) {
+      html += `
+        <div class="shortcuts-section search-syntax-section">
+          <div class="shortcuts-section-title">
+            <span>Smart Search Syntax & Filters</span>
+            <span class="shortcuts-badge" style="font-size: 9px; padding: 0 6px;">Search Box</span>
+          </div>
+          <div class="shortcuts-section-list">
+      `;
+      for (const item of searchSyntax) {
+        const badgeHtml = item.pluginId ? `<span class="shortcuts-badge" style="font-size: 9px; padding: 0 4px; margin-left: 4px;">${escapeHtml(item.pluginId)}</span>` : '';
+        html += `
+          <div class="shortcut-row">
+            <span class="shortcut-desc">${escapeHtml(item.description)} ${badgeHtml}</span>
+            <div class="shortcut-keys"><kbd>${escapeHtml(item.prefix)}</kbd></div>
+          </div>
+        `;
+      }
+      html += `
+          </div>
+        </div>
+      `;
+    }
+
     html += '</div>';
 
     container.innerHTML = html;
@@ -290,7 +317,7 @@ class KeybindingRegistry {
     const activeModal = this.getActiveModal();
 
     // ──────────────────────────────────────────────────────────────────────────
-    // SPECIAL REQUIREMENT: Two-Stage 'Escape' Key Machine
+    // User Requirement: 'Escape' only brings things out of focus, does not clear query
     // ──────────────────────────────────────────────────────────────────────────
     if (e.key === 'Escape') {
       // 1. If help shortcuts overlay is open, dismiss it
@@ -302,81 +329,52 @@ class KeybindingRegistry {
 
       // 2. If any other modal is active
       if (isModalOpen && activeModal) {
-        if (isInputFocused && activeEl && activeEl.value) {
-          // If editing a modal input with text, 1st Escape clears text
-          activeEl.value = '';
-          activeEl.dispatchEvent(new Event('input', { bubbles: true }));
-          e.preventDefault();
-          return;
-        }
         if (isInputFocused && activeEl) {
-          // 2nd Escape blurs the input
           activeEl.blur();
-          e.preventDefault();
-          return;
         }
-        // No input focused: close the modal
         this.closeActiveModal();
         e.preventDefault();
         return;
       }
 
-      // 3. Mobile search dock / detail preview
-      if (dom.appContainer && dom.appContainer.classList.contains('mobile-search-open')) {
-        if (dom.mobileSearchInput) dom.mobileSearchInput.value = '';
-        if (state.currentViewMode === 'docs') {
-          handleDocsSearch('');
-        } else {
-          if (dom.searchInput) dom.searchInput.value = '';
-          filterAndRender();
-        }
-        dom.appContainer.classList.remove('mobile-search-open');
-        e.preventDefault();
-        return;
-      }
-
+      // 3. Mobile detail preview: return to list
       if (dom.appContainer && dom.appContainer.classList.contains('mobile-show-preview')) {
         showMobileList();
         e.preventDefault();
         return;
       }
 
-      // 4. Main Search Input or any focused input field
-      if (isInputFocused && activeEl) {
-        if (activeEl.value && activeEl.value.length > 0) {
-          // Stage 1: Empty the input field first, update filters, keep focus
-          activeEl.value = '';
-          if (dom.clearSearchBtn) dom.clearSearchBtn.style.display = 'none';
-          activeEl.dispatchEvent(new Event('input', { bubbles: true }));
-
-          if (state.currentViewMode === 'docs') {
-            handleDocsSearch('');
-          } else {
-            filterAndRender();
-          }
-          e.preventDefault();
-          return;
-        } else {
-          // Stage 2: Input is already empty -> go out of focus (blur)
-          activeEl.blur();
-          e.preventDefault();
-          return;
-        }
-      }
-
-      // 5. If not input-focused but search input has a residual query, clear it
-      if (dom.searchInput && dom.searchInput.value) {
-        dom.searchInput.value = '';
-        if (dom.clearSearchBtn) dom.clearSearchBtn.style.display = 'none';
-        if (state.currentViewMode === 'docs') {
-          handleDocsSearch('');
-        } else {
-          filterAndRender();
-        }
+      // 4. If autocomplete popup is open, close autocomplete
+      const autocompleteEl = document.getElementById('search-autocomplete');
+      if (autocompleteEl && autocompleteEl.style.display !== 'none') {
+        autocompleteEl.style.display = 'none';
         e.preventDefault();
         return;
       }
+
+      // 5. Input is focused: Blur out of focus without clearing input text
+      if (isInputFocused && activeEl) {
+        activeEl.blur();
+        e.preventDefault();
+        return;
+      }
+
       return;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // User Requirement: 'Enter' in search brings it out of focus
+    // ──────────────────────────────────────────────────────────────────────────
+    if (e.key === 'Enter') {
+      if (isInputFocused && (activeEl === dom.searchInput || activeEl === dom.mobileSearchInput)) {
+        const autocompleteEl = document.getElementById('search-autocomplete');
+        const isAutocompleteOpen = autocompleteEl && autocompleteEl.style.display !== 'none';
+        if (!isAutocompleteOpen) {
+          e.preventDefault();
+          activeEl.blur();
+          return;
+        }
+      }
     }
 
     // ──────────────────────────────────────────────────────────────────────────

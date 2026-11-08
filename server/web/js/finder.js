@@ -29,6 +29,8 @@ import {
 import { renderMarkdown, applyPostMarkdownEnhancements } from './markdown.js';
 import { openNoteModal, closeNoteModal } from './modal.js';
 import { handleDocsSearch, openEditDocModal, renderDocsTree } from './docs.js';
+import { searchRegistry } from './search-registry.js';
+import { searchTokens } from './search-tokens.js';
 
 export function showMobileDetail() {
   if (window.innerWidth <= 768 && dom.appContainer) {
@@ -130,40 +132,55 @@ export function updateCounts() {
   setElText('count-archived', counts.archived);
 }
 
+export function appendTagToSearch(tag) {
+  searchTokens.toggleTag(tag);
+}
+
 export function filterAndRender() {
-  const query = dom.searchInput ? dom.searchInput.value.trim() : '';
+  const query = searchTokens.getFullQueryString();
+  const parsed = searchRegistry.parseQuery(query);
 
-  // 1. Filter by active tab & tag
+  // 1. Structured filtering with tab & tag support
   let items = state.allItems.filter((item) => {
-    if (state.activeTypeFilter === 'archived') {
+    // If query specifies archived status, honor query
+    if (parsed.statuses.includes('archived')) {
+      if (!item.deleted_at) return false;
+    } else if (state.activeTypeFilter === 'archived') {
       return !!item.deleted_at;
-    }
-    if (item.deleted_at) return false;
-
-    if (state.activeTypeFilter === 'all') {
-      // include all active notes + logs
-    } else if (state.activeTypeFilter === 'log') {
-      if (!item.is_log) return false;
     } else {
-      if (item.is_log || (item.type || '').toLowerCase() !== state.activeTypeFilter) {
-        return false;
+      if (item.deleted_at) return false;
+    }
+
+    // Active type filter pill (unless query explicitly specifies @types)
+    if (parsed.types.length === 0) {
+      if (state.activeTypeFilter === 'all') {
+        // all active notes + logs
+      } else if (state.activeTypeFilter === 'log') {
+        if (!item.is_log) return false;
+      } else if (state.activeTypeFilter !== 'archived') {
+        if (item.is_log || (item.type || '').toLowerCase() !== state.activeTypeFilter) {
+          return false;
+        }
       }
     }
 
-    if (state.activeTagFilter) {
+    // Active tag filter pill (unless query explicitly specifies #tags)
+    if (state.activeTagFilter && parsed.tags.length === 0) {
       if (!item.tags || !item.tags.includes(state.activeTagFilter)) return false;
     }
 
-    return true;
+    // 2. Structured query evaluation (#tags, @types, is:status, +area, plugin qualifiers)
+    return searchRegistry.filterItem(item, parsed);
   });
 
-  // 2. Fuzzy rank if query exists
-  if (query) {
+  // 3. Fuzzy rank if freeform clean text exists
+  const textQuery = parsed.cleanText;
+  if (textQuery) {
     const scored = [];
     items.forEach((item) => {
-      const titleMatch = fuzzyMatch(query, item.display);
-      const fleshMatch = fuzzyMatch(query, item.flesh);
-      const tagMatch = item.tags ? fuzzyMatch(query, item.tags.join(' ')) : null;
+      const titleMatch = fuzzyMatch(textQuery, item.display);
+      const fleshMatch = fuzzyMatch(textQuery, item.flesh);
+      const tagMatch = item.tags ? fuzzyMatch(textQuery, item.tags.join(' ')) : null;
 
       let bestScore = -1;
       let positions = [];
@@ -193,7 +210,7 @@ export function filterAndRender() {
   if (dom.searchCount) {
     dom.searchCount.textContent = `${state.filteredItems.length} item${state.filteredItems.length === 1 ? '' : 's'}`;
   }
-  renderList(query);
+  renderList(textQuery || query);
 
   if (state.filteredItems.length > 0) {
     state.selectedIndex = Math.min(state.selectedIndex, state.filteredItems.length - 1);
@@ -806,7 +823,7 @@ export function setupFinderListeners() {
         dom.clearSearchBtn.style.display = dom.searchInput.value ? 'block' : 'none';
       }
       if (state.currentViewMode === 'docs') {
-        handleDocsSearch(dom.searchInput.value);
+        handleDocsSearch(searchTokens.getFullQueryString());
         return;
       }
       filterAndRender();
@@ -815,11 +832,13 @@ export function setupFinderListeners() {
 
   if (dom.clearSearchBtn) {
     dom.clearSearchBtn.addEventListener('click', () => {
+      searchTokens.clearTokens(false);
       if (dom.searchInput) {
         dom.searchInput.value = '';
         dom.clearSearchBtn.style.display = 'none';
         dom.searchInput.focus();
       }
+      searchTokens.renderPills();
       if (state.currentViewMode === 'docs') {
         handleDocsSearch('');
         return;
@@ -846,26 +865,8 @@ export function setupFinderListeners() {
       const chip = e.target.closest('.tag-chip');
       if (!chip) return;
       const tag = chip.dataset.tag;
-      if (state.currentViewMode === 'docs') {
-        if (state.activeDocTagFilter === tag) {
-          state.activeDocTagFilter = null;
-          chip.classList.remove('active');
-        } else {
-          document.querySelectorAll('.tag-chip').forEach((c) => c.classList.remove('active'));
-          state.activeDocTagFilter = tag;
-          chip.classList.add('active');
-        }
-        renderDocsTree(dom.searchInput?.value || '');
-      } else {
-        if (state.activeTagFilter === tag) {
-          state.activeTagFilter = null;
-          chip.classList.remove('active');
-        } else {
-          document.querySelectorAll('.tag-chip').forEach((c) => c.classList.remove('active'));
-          state.activeTagFilter = tag;
-          chip.classList.add('active');
-        }
-        filterAndRender();
+      if (tag) {
+        appendTagToSearch(tag);
       }
     });
   }
@@ -875,18 +876,8 @@ export function setupFinderListeners() {
       const chip = e.target.closest('.preview-tag-chip');
       if (!chip) return;
       const tag = chip.dataset.tag;
-      if (state.currentViewMode === 'docs') {
-        state.activeDocTagFilter = tag;
-        document.querySelectorAll('.tag-chip').forEach((c) => {
-          c.classList.toggle('active', c.dataset.tag === tag);
-        });
-        renderDocsTree(dom.searchInput?.value || '');
-      } else {
-        state.activeTagFilter = tag;
-        document.querySelectorAll('.tag-chip').forEach((c) => {
-          c.classList.toggle('active', c.dataset.tag === tag);
-        });
-        filterAndRender();
+      if (tag) {
+        appendTagToSearch(tag);
       }
     });
   }

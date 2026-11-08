@@ -4,6 +4,7 @@
  */
 
 import { keybindingRegistry } from './keybindings.js';
+import { searchRegistry } from './search-registry.js';
 
 class PluginHost {
   constructor() {
@@ -34,6 +35,15 @@ class PluginHost {
       search: {
         registerProvider(providerFn) {
           host.searchProviders.set(pluginId, providerFn);
+        },
+        registerQualifier(qualifierDef) {
+          searchRegistry.registerQualifier(qualifierDef, pluginId);
+        },
+        registerType(typeDef) {
+          searchRegistry.registerType(typeDef, pluginId);
+        },
+        registerTrigger(triggerDef) {
+          searchRegistry.registerTrigger(triggerDef, pluginId);
         }
       },
       thingsPad: {
@@ -100,6 +110,7 @@ class PluginHost {
     this.searchProviders.delete(pluginId);
     this.thingsPadLayouts.delete(pluginId);
     keybindingRegistry.unregisterPlugin(pluginId);
+    searchRegistry.unregisterPlugin(pluginId);
     this.activePlugins.delete(pluginId);
   }
 

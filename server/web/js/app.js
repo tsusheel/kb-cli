@@ -14,6 +14,8 @@ import { initDocs } from './docs.js';
 import { initSwipeNavigation } from './swipe.js';
 import { pluginsManager } from './plugins.js';
 import { initKeybindings } from './keybindings.js';
+import { initAutocomplete } from './autocomplete.js';
+import { initSearchTokens } from './search-tokens.js';
 import {
   setupFinderListeners,
   loadData,
@@ -42,6 +44,8 @@ async function init() {
   // 4. UI Event Listeners & Gestures
   setupFinderListeners();
   initKeybindings();
+  initSearchTokens();
+  initAutocomplete();
   initSwipeNavigation();
 
   setupModalListeners({
