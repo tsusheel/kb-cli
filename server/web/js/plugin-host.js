@@ -3,6 +3,8 @@
  * Sandboxed, capability-controlled bridge between the core SPA and external plugins.
  */
 
+import { keybindingRegistry } from './keybindings.js';
+
 class PluginHost {
   constructor() {
     this.routes = new Map();
@@ -37,6 +39,19 @@ class PluginHost {
       thingsPad: {
         registerLayout(layoutDef) {
           host.thingsPadLayouts.set(pluginId, layoutDef);
+        }
+      },
+      keybindings: {
+        register(bindingDef) {
+          keybindingRegistry.register({
+            ...bindingDef,
+            id: bindingDef.id || `${pluginId}.${Array.isArray(bindingDef.keys) ? bindingDef.keys[0] : bindingDef.keys}`,
+            pluginId,
+            category: bindingDef.category || `Plugin: ${pluginId}`,
+          });
+        },
+        unregister(bindingId) {
+          keybindingRegistry.unregister(bindingId);
         }
       },
       ui: {
@@ -84,6 +99,7 @@ class PluginHost {
     }
     this.searchProviders.delete(pluginId);
     this.thingsPadLayouts.delete(pluginId);
+    keybindingRegistry.unregisterPlugin(pluginId);
     this.activePlugins.delete(pluginId);
   }
 

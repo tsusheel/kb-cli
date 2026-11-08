@@ -188,9 +188,10 @@
     <!-- Footer: Minimal Shortcuts Bar -->
     <footer class="app-footer">
       <div class="shortcut-hints">
+        <span class="hint-item hint-help" id="shortcuts-help-trigger" style="cursor: pointer;" title="Show Keyboard Shortcuts (?)"><kbd>?</kbd> Help</span>
         <span class="hint-item"><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
         <span class="hint-item"><kbd>/</kbd> Search</span>
-        <span class="hint-item"><kbd>Esc</kbd> Clear</span>
+        <span class="hint-item"><kbd>Esc</kbd> Clear / Exit</span>
         <span class="hint-item"><kbd>V</kbd> View</span>
         <span class="hint-item"><kbd>N</kbd> New</span>
         <span class="hint-item"><kbd>T</kbd> Toggle</span>
@@ -406,6 +407,26 @@
             <button type="submit" id="auth-submit-btn" class="btn btn-primary btn-full">Unlock</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Help Modal Overlay -->
+    <div id="shortcuts-modal" class="modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title">
+      <div class="modal-card shortcuts-modal-card">
+        <div class="modal-header">
+          <div class="shortcuts-header-title">
+            <h2 id="shortcuts-modal-title" class="modal-title">Keyboard Shortcuts</h2>
+            <span class="shortcuts-badge">Press <kbd>?</kbd> anytime</span>
+          </div>
+          <button type="button" id="shortcuts-modal-close-btn" class="btn-clear" title="Close (Esc or ?)">✕</button>
+        </div>
+        <div id="shortcuts-modal-body" class="shortcuts-modal-body">
+          <!-- Dynamically populated from KeybindingRegistry -->
+        </div>
+        <div class="modal-footer shortcuts-modal-footer">
+          <span class="shortcuts-footer-note">Tip: Press <kbd>Esc</kbd> once to clear search, twice to return to list navigation.</span>
+          <button type="button" id="shortcuts-modal-done-btn" class="btn btn-secondary">Close</button>
+        </div>
       </div>
     </div>
 

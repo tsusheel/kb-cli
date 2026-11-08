@@ -559,123 +559,7 @@ export async function deleteCurrentItem() {
 }
 
 export function handleGlobalKeydown(e) {
-  const isModalOpen = dom.noteModal && dom.noteModal.style.display !== 'none';
-  const isInputFocused =
-    document.activeElement === dom.searchInput ||
-    document.activeElement.tagName === 'INPUT' ||
-    document.activeElement.tagName === 'TEXTAREA' ||
-    document.activeElement.tagName === 'SELECT';
-
-  if (e.key === 'Escape') {
-    if (isModalOpen) {
-      closeNoteModal();
-      e.preventDefault();
-    } else if (dom.appContainer && dom.appContainer.classList.contains('mobile-search-open')) {
-      if (dom.mobileSearchInput) dom.mobileSearchInput.value = '';
-      if (state.currentViewMode === 'docs') {
-        if (dom.docsSearchInput) {
-          dom.docsSearchInput.value = '';
-          dom.docsSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      } else {
-        if (dom.searchInput) {
-          dom.searchInput.value = '';
-          dom.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      }
-      dom.appContainer.classList.remove('mobile-search-open');
-      setMobileSearchButtonState('done');
-      e.preventDefault();
-    } else if (dom.appContainer && dom.appContainer.classList.contains('mobile-show-preview')) {
-      showMobileList();
-      e.preventDefault();
-    } else if (dom.searchInput && dom.searchInput.value) {
-      dom.searchInput.value = '';
-      if (dom.clearSearchBtn) dom.clearSearchBtn.style.display = 'none';
-      filterAndRender();
-      e.preventDefault();
-    }
-    return;
-  }
-
-  if (isModalOpen) return;
-
-  // Focus search on '/' or 'Ctrl+K' / 'Cmd+K'
-  if (
-    (e.key === '/' && !isInputFocused) ||
-    ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')
-  ) {
-    e.preventDefault();
-    if (dom.searchInput) {
-      dom.searchInput.focus();
-      dom.searchInput.select();
-    }
-    return;
-  }
-
-  // Navigation (Arrow keys or j/k or Ctrl+N/Ctrl+P)
-  if (
-    e.key === 'ArrowDown' ||
-    (isInputFocused && e.ctrlKey && e.key === 'n') ||
-    (!isInputFocused && e.key === 'j')
-  ) {
-    e.preventDefault();
-    if (state.filteredItems.length > 0) {
-      selectItem(Math.min(state.selectedIndex + 1, state.filteredItems.length - 1));
-    }
-    return;
-  }
-
-  if (
-    e.key === 'ArrowUp' ||
-    (isInputFocused && e.ctrlKey && e.key === 'p') ||
-    (!isInputFocused && e.key === 'k')
-  ) {
-    e.preventDefault();
-    if (state.filteredItems.length > 0) {
-      selectItem(Math.max(state.selectedIndex - 1, 0));
-    }
-    return;
-  }
-
-  // Actions when not typing in an input
-  if (!isInputFocused) {
-    if (e.key === 'v' || e.key === 'V') {
-      e.preventDefault();
-      toggleViewMode();
-    } else if (e.key === 'n' || e.key === 'N') {
-      e.preventDefault();
-      openNoteModal();
-    } else if (e.key === 't' || e.key === 'T') {
-      e.preventDefault();
-      toggleCurrentItemStatus();
-    } else if (e.key === 'c' || e.key === 'C') {
-      e.preventDefault();
-      const item = state.filteredItems[state.selectedIndex];
-      if (item) {
-        navigator.clipboard.writeText(item.id);
-        showToast(`Copied ID: ${item.short_id || item.id.substring(0, 7)}`);
-      }
-    } else if (e.key === 'm' || e.key === 'M') {
-      e.preventDefault();
-      const item = state.filteredItems[state.selectedIndex];
-      if (item) {
-        const md = `# ${item.display}\n\n${item.flesh || ''}`;
-        navigator.clipboard.writeText(md);
-        showToast('Copied Note Markdown');
-      }
-    } else if (e.key === 'e' || e.key === 'E') {
-      e.preventDefault();
-      const item = state.filteredItems[state.selectedIndex];
-      if (item && !item.is_log) {
-        if (item.type === 'doc' || item.is_doc) {
-          openEditDocModal(item.doc_path || item.id);
-        } else {
-          openNoteModal(item);
-        }
-      }
-    }
-  }
+  // Centralized key navigation is now managed by keybindingRegistry
 }
 
 // Mobile Bottom Search Handlers & State
@@ -1019,8 +903,7 @@ export function setupFinderListeners() {
     });
   }
 
-  // Keyboard Navigation
-  document.addEventListener('keydown', handleGlobalKeydown);
+  // Keyboard Navigation is initialized by keybindingRegistry.init()
 
   // New Note Header Button
   if (dom.newNoteBtn) {

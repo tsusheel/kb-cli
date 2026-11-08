@@ -130,4 +130,11 @@ export const dom = {
   folderModalCancelBtn: document.getElementById('folder-modal-cancel-btn'),
   formFolderPath: document.getElementById('form-folder-path'),
   formFolderTitle: document.getElementById('form-folder-title'),
+
+  // Shortcuts Help Modal Overlay Elements
+  shortcutsModal: document.getElementById('shortcuts-modal'),
+  shortcutsModalCloseBtn: document.getElementById('shortcuts-modal-close-btn'),
+  shortcutsModalDoneBtn: document.getElementById('shortcuts-modal-done-btn'),
+  shortcutsModalBody: document.getElementById('shortcuts-modal-body'),
+  shortcutsHelpTrigger: document.getElementById('shortcuts-help-trigger'),
 };
